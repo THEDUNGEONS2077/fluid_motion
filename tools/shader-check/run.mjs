@@ -42,13 +42,14 @@ const shaders = Object.fromEntries(
     .filter((n) => /\.(vert|frag)$/.test(n))
     .map((n) => [n, source(n)]),
 );
-for (const scene of ['rain', 'neural', 'velocity']) {
+const SCENES = ['rain', 'rain-low', 'neural', 'velocity'];
+for (const scene of SCENES) {
   if (!existsSync(join(dumpDir, `${scene}.json`))) {
     console.error(`no ${scene}.json in ${dumpDir}: run ./gradlew :app:testDebugUnitTest first`);
     process.exit(2);
   }
 }
-const dumps = Object.fromEntries(['rain', 'neural', 'velocity'].map((s) => [s, JSON.parse(readFileSync(join(dumpDir, `${s}.json`), 'utf8'))]));
+const dumps = Object.fromEntries(SCENES.map((s) => [s, JSON.parse(readFileSync(join(dumpDir, `${s}.json`), 'utf8'))]));
 const fonts = {
   mono: readFileSync(join(root, 'app/src/main/res/font/jetbrains_mono_regular.ttf')).toString('base64'),
   kana: existsSync(KANA_FONT) ? readFileSync(KANA_FONT).toString('base64') : null,

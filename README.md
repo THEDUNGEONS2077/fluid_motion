@@ -29,7 +29,10 @@ Android 8.1 or newer, with OpenGL ES 3 (practically every phone since 2015). It 
 You can change the colours, glow and power settings any time, even while the wallpaper is set: it changes straight away. Tap the wallpaper in the app to hide the controls and see it whole.
 
 **POWER:**
-- **ECO / BALANCED / SMOOTH** set the frames a second while the wallpaper is on screen.
+- **AUTO** finds the balance for your phone: tap **AUTO CALIBRATE** (about half a minute). It draws each wallpaper at 30 frames a second, at the sharpest quality your phone draws cheaply.
+- **MANUAL** lets you choose:
+  - **ECO / BALANCED / SMOOTH** set the frames a second while the wallpaper is on screen;
+  - **QUALITY** sets how sharp it's drawn, from LOW (lightest on weak phones) to ULTRA (the screen's full resolution).
 - **STILL IN BATTERY SAVER:** a still frame while battery saver is on.
 - **COOL DOWN WHEN HOT:** SMOOTH eases to 30 as the phone nears its heat limit; half the frames when it's warm, a still frame when it's hot.
 

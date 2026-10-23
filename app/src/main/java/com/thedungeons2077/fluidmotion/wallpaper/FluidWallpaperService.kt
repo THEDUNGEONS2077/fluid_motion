@@ -59,13 +59,16 @@ abstract class FluidWallpaperService : WallpaperService() {
         /** The wallpaper's palette and glow, from the settings (and new colours for the system, if they changed). */
         private fun applyLook() {
             val p = settings.palette(kind)
-            loop.setLook(p.colors, settings.glow(kind))
+            loop.setLook(p.colors, settings.glow(kind), settings.quality(kind))
             if (palette.isNotEmpty() && palette != p.id) notifyColorsChanged()
             palette = p.id
         }
 
         /** The frame rate the settings and the phone's state call for. */
-        private fun applyRate() = loop.setRate(frameRate(settings.power, PowerWatch.state), settings.power.coolWhenHot)
+        private fun applyRate() {
+            val power = settings.effectivePower()
+            loop.setRate(frameRate(power, PowerWatch.state), power.coolWhenHot)
+        }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)

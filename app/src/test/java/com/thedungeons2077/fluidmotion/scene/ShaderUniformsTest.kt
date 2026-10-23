@@ -4,9 +4,9 @@
  * a misspelt name and leaves an unset uniform at 0 (a scene collapsed to a
  * point, say), so without a phone this is where such slips are caught.
  *
- * Reads the sources: the renderers' `val x = GlProgram(context.assets,
- * "a.vert", "b.frag")` and their `x.u("name")` calls (a `for (p in
- * listOf(a, b))` loop counts for each program listed).
+ * Reads the sources: the renderers' (and gl/ScaledTarget.kt's) `val x =
+ * GlProgram(context.assets, "a.vert", "b.frag")` and their `x.u("name")`
+ * calls (a `for (p in listOf(a, b))` loop counts for each program listed).
  */
 package com.thedungeons2077.fluidmotion.scene
 
@@ -32,14 +32,15 @@ class ShaderUniformsTest {
 
     @Test
     fun `renderers and shaders agree on every uniform`() {
-        val renderers = File(main, "java/com/thedungeons2077/fluidmotion/scene").walk().filter { it.name.endsWith("Renderer.kt") }.toList()
-        assertTrue("found the renderers", renderers.size == 3)
+        val renderers = File(main, "java/com/thedungeons2077/fluidmotion/scene").walk().filter { it.name.endsWith("Renderer.kt") }.toList() +
+            File(main, "java/com/thedungeons2077/fluidmotion/gl/ScaledTarget.kt")
+        assertTrue("found the renderers", renderers.size == 4)
         val problems = mutableListOf<String>()
         var programCount = 0
         var uniformCount = 0
         for (file in renderers) {
             val code = file.readText()
-            val programs = Regex("""val (\w+) = GlProgram\(context\.assets, "([\w.]+)", "([\w.]+)"\)""").findAll(code)
+            val programs = Regex("""val (\w+) = GlProgram\((?:context\.)?assets, "([\w.]+)", "([\w.]+)"\)""").findAll(code)
                 .associate { it.groupValues[1] to (it.groupValues[2] to it.groupValues[3]) }
             val loops = Regex("""for \((\w+) in listOf\(([\w, ]+)\)\)""").findAll(code)
                 .associate { m -> m.groupValues[1] to m.groupValues[2].split(",").map { it.trim() } }
@@ -58,8 +59,8 @@ class ShaderUniformsTest {
             }
         }
         println("programs $programCount, uniforms $uniformCount")
-        // Not vacuous: rain 3 programs, neural 4, velocity 4, and their uniforms all looked at.
-        assertTrue("programs found: $programCount", programCount == 11)
+        // Not vacuous: rain 3 programs, neural 4, velocity 4, the upscale 1, and their uniforms all looked at.
+        assertTrue("programs found: $programCount", programCount == 12)
         assertTrue("uniforms checked: $uniformCount", uniformCount > 60)
         assertTrue(problems.joinToString("\n"), problems.isEmpty())
     }

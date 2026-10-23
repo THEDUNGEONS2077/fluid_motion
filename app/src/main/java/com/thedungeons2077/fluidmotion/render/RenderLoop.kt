@@ -48,6 +48,7 @@ import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.Headroom
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.scene.Scene
 import com.thedungeons2077.fluidmotion.scene.SceneKind
 import java.util.concurrent.CountDownLatch
@@ -89,6 +90,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
     private var fps = 30
     private var colors: PaletteColors = Palettes.PHOSPHOR.colors
     private var glow = GlowLevel.DEFAULT
+    private var quality = Quality.DEFAULT
     private var scheduled = false
     private var lastFrameNs = 0L
     private var frames = 0L
@@ -205,15 +207,22 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         report()
     }
 
-    /** Colours and glow (a still wallpaper redraws to show them). */
-    fun setLook(colors: PaletteColors, glow: GlowLevel) = post {
+    /** Colours, glow and quality (a still wallpaper redraws to show them). */
+    fun setLook(colors: PaletteColors, glow: GlowLevel, quality: Quality) = post {
         this.colors = colors
         this.glow = glow
+        this.quality = quality
         scene?.let {
             it.setPalette(colors)
             it.setGlow(glow)
+            it.setQuality(quality)
         }
         if (fps == 0) drawStill()
+    }
+
+    /** Calibrating: where the GPU can't be timed, frames are timed to their end instead (FrameMeter.sync). */
+    fun setCalibrating(on: Boolean) = post {
+        meter.sync = on
     }
 
     /** Another wallpaper in the same surface (the app's preview switching). */
@@ -265,6 +274,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         kind.create(context).also {
             it.setPalette(colors)
             it.setGlow(glow)
+            it.setQuality(quality)
         }
     } catch (e: RuntimeException) {
         Log.e(GL_TAG, "can't draw ${kind.id}", e)

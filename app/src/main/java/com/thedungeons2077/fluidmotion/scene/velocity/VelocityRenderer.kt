@@ -9,6 +9,9 @@
  *   2. the dark background slid in under it by that alpha (velocity_bg.frag).
  * Per frame the CPU writes a few small uniform arrays; nothing is sent as
  * buffers, nothing allocated.
+ *
+ * QUALITY: below full resolution it draws into a smaller frame (with its
+ * own alpha, for step 2) scaled up after (gl/ScaledTarget.kt).
  */
 package com.thedungeons2077.fluidmotion.scene.velocity
 
@@ -16,10 +19,12 @@ import android.content.Context
 import android.opengl.GLES30
 import com.thedungeons2077.fluidmotion.gl.EmptyVao
 import com.thedungeons2077.fluidmotion.gl.GlProgram
+import com.thedungeons2077.fluidmotion.gl.ScaledTarget
 import com.thedungeons2077.fluidmotion.gl.uniformRgb
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityFrame
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityParams
@@ -40,6 +45,9 @@ class VelocityRenderer(context: Context) : Scene {
     private val flare = GlProgram(context.assets, "velocity_flare.vert", "velocity_flare.frag")
     private val bg = GlProgram(context.assets, "fullscreen.vert", "velocity_bg.frag")
     private val empty = EmptyVao()
+    private val target = ScaledTarget(context.assets)
+    private var quality = Quality.DEFAULT
+    private var targetDirty = true
 
     private var colors: PaletteColors = Palettes.BLOOD.colors
     private var glow = GlowLevel.DEFAULT
@@ -66,7 +74,11 @@ class VelocityRenderer(context: Context) : Scene {
         sim = VelocitySim(width / density, height / density, rng)
         makeTile(rng)
         dirty = true
+        targetDirty = true
     }
+
+    /** The px per dp drawn at: the screen's, or fewer at a lower quality. */
+    private val pxPerDp: Float get() = density * quality.scale(density)
 
     /** The fine motion-blur lines: one brightness per dp row, mostly faint, now and then bright (the web's pattern). */
     private fun makeTile(rng: Rng) {
@@ -89,11 +101,15 @@ class VelocityRenderer(context: Context) : Scene {
     override fun render(dt: Float) {
         val s = sim ?: return
         if (dt > 0f) s.advance(min(dt, MAX_FRAME_STEP))
+        if (targetDirty) {
+            targetDirty = false
+            target.resize(screenW, screenH, quality.scale(density))
+            dirty = true
+        }
         if (dirty) setUniforms(s)
         val g = VelocityParams.GLOW.getValue(glow)
 
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
-        GLES30.glViewport(0, 0, screenW, screenH)
+        target.begin()
         GLES30.glClearColor(0f, 0f, 0f, 0f)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         GLES30.glEnable(GLES30.GL_BLEND)
@@ -129,6 +145,7 @@ class VelocityRenderer(context: Context) : Scene {
         bg.use()
         empty.drawFullScreen()
         GLES30.glDisable(GLES30.GL_BLEND)
+        target.end()
     }
 
     /** Uniforms that hold until the screen, palette or glow changes. */
@@ -137,8 +154,8 @@ class VelocityRenderer(context: Context) : Scene {
         val tones = velocityTones(colors)
         val g = VelocityParams.GLOW.getValue(glow)
         panel.use()
-        GLES30.glUniform2f(panel.u("uTargetPx"), screenW.toFloat(), screenH.toFloat())
-        GLES30.glUniform1f(panel.u("uDensity"), density)
+        GLES30.glUniform2f(panel.u("uTargetPx"), target.width.toFloat(), target.height.toFloat())
+        GLES30.glUniform1f(panel.u("uDensity"), pxPerDp)
         GLES30.glUniform2f(panel.u("uScreen"), s.w, s.h)
         GLES30.glUniform1f(panel.u("uScreenH"), s.h)
         uniformRgb(panel.u("uPale"), tones.pale)
@@ -147,16 +164,16 @@ class VelocityRenderer(context: Context) : Scene {
         GLES30.glUniform1f(panel.u("uStriation"), VelocityParams.STRIATION)
         GLES30.glUniform1i(panel.u("uTile"), 0)
         light.use()
-        GLES30.glUniform2f(light.u("uTargetPx"), screenW.toFloat(), screenH.toFloat())
-        GLES30.glUniform1f(light.u("uDensity"), density)
+        GLES30.glUniform2f(light.u("uTargetPx"), target.width.toFloat(), target.height.toFloat())
+        GLES30.glUniform1f(light.u("uDensity"), pxPerDp)
         GLES30.glUniform2f(light.u("uScreen"), s.w, s.h)
         GLES30.glUniform1i(light.u("uLineCount"), VelocityParams.LONG_LINES)
         uniformRgb(light.u("uPale"), tones.pale)
         uniformRgb(light.u("uRed"), tones.red)
         GLES30.glUniform1f(light.u("uGlow"), g)
         flare.use()
-        GLES30.glUniform2f(flare.u("uTargetPx"), screenW.toFloat(), screenH.toFloat())
-        GLES30.glUniform1f(flare.u("uDensity"), density)
+        GLES30.glUniform2f(flare.u("uTargetPx"), target.width.toFloat(), target.height.toFloat())
+        GLES30.glUniform1f(flare.u("uDensity"), pxPerDp)
         GLES30.glUniform3f(flare.u("uBloom"), s.flareX, s.flareY, s.flareR)
         GLES30.glUniform3f(flare.u("uArc"), s.arcX, s.arcY, s.arcR)
         GLES30.glUniform2f(flare.u("uArcSpan"), VelocityParams.ARC_FROM, VelocityParams.ARC_TO)
@@ -164,7 +181,7 @@ class VelocityRenderer(context: Context) : Scene {
         GLES30.glUniform1f(flare.u("uArcAlpha"), VelocityParams.ARC_ALPHA)
         uniformRgb(flare.u("uPale"), tones.pale)
         uniformRgb(flare.u("uFlare"), tones.flare)
-        VelocityFrame.arcBox(s, density, box)
+        VelocityFrame.arcBox(s, pxPerDp, box)
         GLES30.glUniform4f(flare.u("uArcBox"), box[0], box[1], box[2], box[3])
         bg.use()
         uniformRgb(bg.u("uBg"), colors.bg)
@@ -182,9 +199,16 @@ class VelocityRenderer(context: Context) : Scene {
         dirty = true
     }
 
+    override fun setQuality(quality: Quality) {
+        if (quality == this.quality) return
+        this.quality = quality
+        targetDirty = true
+    }
+
     override fun release() {
         if (tile != 0) GLES30.glDeleteTextures(1, intArrayOf(tile), 0)
         tile = 0
+        target.release()
         empty.release()
         panel.release()
         light.release()

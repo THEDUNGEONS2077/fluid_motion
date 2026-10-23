@@ -9,6 +9,10 @@
  * (nodes, sparks, bokeh); the links, which never change on a screen, are
  * sent once. Colours along the diagonal are worked out in the vertex
  * shaders (neural_shade.glsl), so a palette change is four uniforms.
+ *
+ * QUALITY: below full resolution it draws into a smaller frame scaled up
+ * after (gl/ScaledTarget.kt); LOW also leaves out the links' soft glow
+ * pass, its widest.
  */
 package com.thedungeons2077.fluidmotion.scene.neural
 
@@ -16,10 +20,12 @@ import android.content.Context
 import android.opengl.GLES30
 import com.thedungeons2077.fluidmotion.gl.EmptyVao
 import com.thedungeons2077.fluidmotion.gl.GlProgram
+import com.thedungeons2077.fluidmotion.gl.ScaledTarget
 import com.thedungeons2077.fluidmotion.gl.uniformRgb
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.mixRgb
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralFrame
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralParams
@@ -37,8 +43,11 @@ class NeuralRenderer(context: Context) : Scene {
     private val link = GlProgram(context.assets, "neural_link.vert", "neural_link.frag")
     private val spark = GlProgram(context.assets, "neural_spark.vert", "neural_spark.frag")
     private val empty = EmptyVao()
+    private val target = ScaledTarget(context.assets)
 
     private var colors: PaletteColors = Palettes.BLOOD.colors
+    private var quality = Quality.DEFAULT
+    private var targetDirty = true
     private var glow = GlowLevel.DEFAULT
     private var sim: NeuralSim? = null
     private var screenW = 0
@@ -68,7 +77,11 @@ class NeuralRenderer(context: Context) : Scene {
         check(s.n <= NeuralFrame.MAX_NODES && s.nb <= NeuralFrame.MAX_BOKEH) { "scene larger than the shaders' arrays" }
         sendLinks(s)
         dirty = true
+        targetDirty = true
     }
+
+    /** The px per dp drawn at: the screen's, or fewer at a lower quality. */
+    private val pxPerDp: Float get() = density * quality.scale(density)
 
     /** The links as a static instance buffer: two node numbers and a weight each. */
     private fun sendLinks(s: NeuralSim) {
@@ -94,11 +107,15 @@ class NeuralRenderer(context: Context) : Scene {
     override fun render(dt: Float) {
         val s = sim ?: return
         if (dt > 0f) s.advance(min(dt, MAX_FRAME_STEP))
+        if (targetDirty) {
+            targetDirty = false
+            target.resize(screenW, screenH, quality.scale(density))
+            dirty = true
+        }
         if (dirty) setUniforms(s)
         val g = NeuralParams.GLOW.getValue(glow)
 
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
-        GLES30.glViewport(0, 0, screenW, screenH)
+        target.begin()
         // 1. The background light (every pixel: the clear only spares a tiled GPU loading the last frame).
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         GLES30.glDisable(GLES30.GL_BLEND)
@@ -118,7 +135,7 @@ class NeuralRenderer(context: Context) : Scene {
         link.use()
         GLES30.glUniform4fv(link.u("uNodes"), pairs, nodes, 0)
         GLES30.glBindVertexArray(linkVao)
-        if (g.lineGlow > 0f) {
+        if (g.lineGlow > 0f && quality.linkGlow) {
             GLES30.glUniform1f(link.u("uWidth"), NeuralParams.LINE_WIDTH * NeuralFrame.GLOW_WIDTH)
             GLES30.glUniform1f(link.u("uStrength"), g.lineGlow)
             GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLE_STRIP, 0, 4, linkCount)
@@ -129,10 +146,11 @@ class NeuralRenderer(context: Context) : Scene {
         GLES30.glBindVertexArray(0)
 
         // 4. Nodes (bigger and brighter while lit), then the signals.
-        val k = NeuralFrame.sparks(s, g.haloSize, density, sparks)
+        val k = NeuralFrame.sparks(s, g.haloSize, pxPerDp, sparks)
         spark.use()
         GLES30.glUniform4fv(spark.u("uSparks"), k, sparks, 0)
         empty.drawQuads(k)
+        target.end()
     }
 
     /** Uniforms that hold until the screen, palette or glow changes. */
@@ -146,8 +164,8 @@ class NeuralRenderer(context: Context) : Scene {
         uniformRgb(bg.u("uAccent"), colors.accent)
         for (p in listOf(bokeh, link, spark)) {
             p.use()
-            GLES30.glUniform2f(p.u("uTargetPx"), screenW.toFloat(), screenH.toFloat())
-            GLES30.glUniform1f(p.u("uDensity"), density)
+            GLES30.glUniform2f(p.u("uTargetPx"), target.width.toFloat(), target.height.toFloat())
+            GLES30.glUniform1f(p.u("uDensity"), pxPerDp)
             GLES30.glUniform2f(p.u("uScreen"), s.w, s.h)
             uniformRgb(p.u("uCool"), cool)
             uniformRgb(p.u("uBright"), colors.textBright)
@@ -156,7 +174,7 @@ class NeuralRenderer(context: Context) : Scene {
         link.use()
         GLES30.glUniform1f(link.u("uMaxLink"), s.maxLink)
         spark.use()
-        GLES30.glUniform1f(spark.u("uEdge"), 1f / NeuralFrame.spriteScale(g.haloSize, density))
+        GLES30.glUniform1f(spark.u("uEdge"), 1f / NeuralFrame.spriteScale(g.haloSize, pxPerDp))
         GLES30.glUniform1f(spark.u("uHalo"), g.halo)
     }
 
@@ -170,8 +188,15 @@ class NeuralRenderer(context: Context) : Scene {
         dirty = true
     }
 
+    override fun setQuality(quality: Quality) {
+        if (quality == this.quality) return
+        this.quality = quality
+        targetDirty = true
+    }
+
     override fun release() {
         releaseLinks()
+        target.release()
         empty.release()
         bg.release()
         bokeh.release()

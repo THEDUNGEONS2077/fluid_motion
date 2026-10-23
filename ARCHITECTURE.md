@@ -55,6 +55,16 @@ The objective is no hit to battery or performance. How it's met:
 - **System colours.** `onComputeColors` gives the system the palette's colours, so it never screenshots the wallpaper to work them out.
 - **Opaque surfaces.** The wallpaper window and the app's preview are RGBX, so the compositor never blends them.
 
+## QUALITY and AUTO
+- **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass.
+  - Below the screen's resolution, NEURAL NET and VELOCITY draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
+  - At full resolution nothing extra is drawn.
+- **Applying a change.** A quality or glow change is applied at the scene's next frame, with the context current: the rain rebuilds and pre-warms again.
+- **AUTO CALIBRATE** (`ui/HomeState.kt`, rules in `Calibration`):
+  - **What it measures.** Each wallpaper is drawn in the preview at each quality that draws differently on this screen, at BALANCED's rate. Its frames are timed by FrameMeter. Where the GPU can't be timed it uses `glFinish` wall time, an upper bound, only while calibrating.
+  - **What it picks.** Each wallpaper gets the highest quality within 3 ms GPU and 3 ms CPU, and the rate is BALANCED. If even the chosen quality is over budget, the rate is ECO.
+  - **Where it's kept.** The result is stored with the system build and screen (`Settings.calibrated`). The wallpapers read the quality and profile in force through `Settings.quality(kind)` and `effectivePower()`.
+
 ## Lifecycle
 - **Engines.** The system makes one engine per running copy: home screen, lock screen, and the picker's preview. Each has its own `RenderLoop` (thread and EGL context); the EGL display is shared and never terminated.
 - **The app's preview.** It is a SurfaceView with its own loop. It runs between `onStart` and `onStop`, and is released in `onDestroy`.

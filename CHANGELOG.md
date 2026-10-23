@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.0 (build 4)
+AUTO CALIBRATE, and a QUALITY setting.
+
+**POWER has two modes:**
+- **AUTO** finds the balance for this phone. It draws at 30 frames a second, where the screen can slow down too (the measurements showed the screen's refresh is most of the cost). Each wallpaper gets the sharpest QUALITY it draws cheaply here.
+  - **AUTO CALIBRATE** (about half a minute) draws each wallpaper at each quality on the phone and times its frames. Each one gets the highest quality whose frames stay under 3 ms of GPU and 3 ms of CPU (a tenth of a frame at 30 fps, so both stay at their lowest clocks).
+  - A phone too weak for even LOW goes to ECO.
+  - If the system or screen changes, AUTO asks for a new calibration.
+- **MANUAL** keeps the profiles (ECO, BALANCED, SMOOTH) and adds **QUALITY**:
+  - **LOW:** 1.5 px per dp, and NEURAL NET without its links' glow;
+  - **MEDIUM:** 2.25 px per dp;
+  - **HIGH:** 3 px per dp, the look so far;
+  - **ULTRA:** the screen's full resolution, always.
+  - Below full resolution the wallpaper is drawn smaller and scaled up smoothly in one pass. At full resolution nothing extra is drawn. On the S25 Ultra at its default FHD+, HIGH and ULTRA are both full resolution.
+- **Who starts where:**
+  - a new install starts in AUTO;
+  - a phone that already chose a profile by hand (yours: SMOOTH) stays MANUAL, so its rate never changes by itself.
+
+**Also:**
+- A glow or quality change rebuilds its scene at the next frame, not at once. That's safe even when the wallpaper's surface has gone away for a moment.
+- COPY DIAGNOSTICS includes the mode, the quality and what AUTO CALIBRATE measured.
+
+**Please check on the S25 Ultra:**
+- **ECO:** run MEASURE IMPACT on MATRIX RAIN. ECO (24 fps here) should cost less than BALANCED now.
+- **AUTO:** switch POWER to AUTO and run AUTO CALIBRATE, then paste COPY DIAGNOSTICS: it has each wallpaper's measured quality.
+- **LOW:** in MANUAL, try QUALITY LOW on each wallpaper, to see how it looks on your screen.
+
 ## 0.2.1 (build 3)
 ECO now actually saves battery.
 

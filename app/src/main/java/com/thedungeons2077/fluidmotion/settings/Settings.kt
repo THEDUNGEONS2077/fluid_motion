@@ -1,6 +1,7 @@
 /*
  * settings/Settings.kt: what the user chose, kept in SharedPreferences
- * ("fluid_motion"): each wallpaper's palette and glow, the power choices,
+ * ("fluid_motion"): each wallpaper's palette and glow, the power choices
+ * (AUTO, calibrated for the phone, or MANUAL: a profile and a QUALITY),
  * the app's own colours, which wallpaper the app is showing.
  *
  * Layer: settings (Android). The wallpapers run in the app's process, so a
@@ -11,54 +12,119 @@ package com.thedungeons2077.fluidmotion.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.thedungeons2077.fluidmotion.lib.Calibration
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.Palette
 import com.thedungeons2077.fluidmotion.lib.Palettes
 import com.thedungeons2077.fluidmotion.lib.PowerChoice
+import com.thedungeons2077.fluidmotion.lib.PowerMode
 import com.thedungeons2077.fluidmotion.lib.PowerProfile
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.scene.SceneKind
 
 /** The app's settings. */
 class Settings(context: Context) {
     private val prefs: SharedPreferences = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
+    /** Writes in the background ([apply]); calls aren't chained (some stand-ins, as the screenshot renderer's, return null from them). */
+    private fun write(block: SharedPreferences.Editor.() -> Unit) {
+        val editor = prefs.edit()
+        editor.block()
+        editor.apply()
+    }
+
+    init {
+        // The mode, fixed on first use: a phone that chose a profile by hand before AUTO existed (0.2) stays
+        // MANUAL, so its rate never changes by itself; a new one starts in AUTO.
+        if (!prefs.contains("power.mode")) {
+            write { putString("power.mode", (if (prefs.contains("power.profile")) PowerMode.MANUAL else PowerMode.AUTO).name) }
+        }
+    }
+
+    /** AUTO (calibrated for this phone) or MANUAL (a profile and a quality). */
+    var mode: PowerMode
+        get() = PowerMode.find(prefs.getString("power.mode", null), PowerMode.AUTO)
+        set(value) = write { putString("power.mode", value.name) }
+
+    /** QUALITY when MANUAL (all wallpapers). */
+    var manualQuality: Quality
+        get() = Quality.find(prefs.getString("quality.manual", null))
+        set(value) = write { putString("quality.manual", value.name) }
+
+    /** What AUTO CALIBRATE chose, and on what (null until it has run). */
+    var calibrated: Calibrated?
+        get() {
+            val profile = prefs.getString("auto.profile", null) ?: return null
+            return Calibrated(
+                qualities = SceneKind.entries.associateWith { Quality.find(prefs.getString("auto.quality.${it.id}", null)) },
+                profile = PowerProfile.find(profile),
+                device = prefs.getString("auto.device", "") ?: "",
+                at = prefs.getLong("auto.at", 0L),
+            )
+        }
+        set(value) = write {
+            if (value == null) {
+                remove("auto.profile")
+            } else {
+                for ((kind, q) in value.qualities) putString("auto.quality.${kind.id}", q.name)
+                putString("auto.profile", value.profile.name)
+                putString("auto.device", value.device)
+                putLong("auto.at", value.at)
+            }
+        }
+
+    /** The power choices in force: AUTO's calibrated profile (BALANCED until calibrated), or the hand-picked one. */
+    fun effectivePower(): PowerChoice {
+        val choice = power
+        return if (mode == PowerMode.AUTO) choice.copy(profile = calibrated?.profile ?: Calibration.PROFILE) else choice
+    }
+
+    /** A wallpaper's quality in force: AUTO's calibrated one (HIGH until calibrated), or MANUAL's. */
+    fun quality(kind: SceneKind): Quality =
+        if (mode == PowerMode.AUTO) calibrated?.qualities?.get(kind) ?: Quality.DEFAULT else manualQuality
+
     /** A wallpaper's palette (its reference's, until chosen). */
     fun palette(kind: SceneKind): Palette = Palettes.find(prefs.getString("palette.${kind.id}", kind.defaultPalette))
 
-    fun setPalette(kind: SceneKind, palette: Palette) = prefs.edit().putString("palette.${kind.id}", palette.id).apply()
+    fun setPalette(kind: SceneKind, palette: Palette) = write { putString("palette.${kind.id}", palette.id) }
 
     /** A wallpaper's glow level. */
     fun glow(kind: SceneKind): GlowLevel = GlowLevel.find(prefs.getString("glow.${kind.id}", null))
 
-    fun setGlow(kind: SceneKind, glow: GlowLevel) = prefs.edit().putString("glow.${kind.id}", glow.name).apply()
+    fun setGlow(kind: SceneKind, glow: GlowLevel) = write { putString("glow.${kind.id}", glow.name) }
 
-    /** The power choices (all wallpapers). */
+    /** The power choices (all wallpapers); its profile is MANUAL's (effectivePower() is what's in force). */
     var power: PowerChoice
         get() = PowerChoice(
             profile = PowerProfile.find(prefs.getString("power.profile", null)),
             stillInSaver = prefs.getBoolean("power.stillInSaver", true),
             coolWhenHot = prefs.getBoolean("power.coolWhenHot", true),
         )
-        set(value) = prefs.edit()
-            .putString("power.profile", value.profile.name)
-            .putBoolean("power.stillInSaver", value.stillInSaver)
-            .putBoolean("power.coolWhenHot", value.coolWhenHot)
-            .apply()
+        set(value) = write {
+            putString("power.profile", value.profile.name)
+            putBoolean("power.stillInSaver", value.stillInSaver)
+            putBoolean("power.coolWhenHot", value.coolWhenHot)
+        }
 
     /** The app's own colours. */
     var uiPalette: Palette
         get() = Palettes.find(prefs.getString("ui.palette", null))
-        set(value) = prefs.edit().putString("ui.palette", value.id).apply()
+        set(value) = write { putString("ui.palette", value.id) }
+
+    /** What the last AUTO CALIBRATE measured, as text (COPY DIAGNOSTICS; empty until one has run). */
+    var calibrationReport: String
+        get() = prefs.getString("auto.report", "") ?: ""
+        set(value) = write { putString("auto.report", value) }
 
     /** The last MEASURE IMPACT report (empty until one has run). */
     var impactReport: String
         get() = prefs.getString("impact.report", "") ?: ""
-        set(value) = prefs.edit().putString("impact.report", value).apply()
+        set(value) = write { putString("impact.report", value) }
 
     /** The wallpaper the app shows and sets. */
     var selected: SceneKind
         get() = SceneKind.find(prefs.getString("ui.selected", null))
-        set(value) = prefs.edit().putString("ui.selected", value.id).apply()
+        set(value) = write { putString("ui.selected", value.id) }
 
     /**
      * Calls [onChange] (main thread) whenever a setting changes, until the
@@ -76,3 +142,10 @@ class Settings(context: Context) {
         const val FILE = "fluid_motion"
     }
 }
+
+/**
+ * AUTO CALIBRATE's result: each wallpaper's quality and the profile, the
+ * phone it measured ([device]: system build and screen, so a system update
+ * or a new resolution can ask for a new calibration), and when.
+ */
+data class Calibrated(val qualities: Map<SceneKind, Quality>, val profile: PowerProfile, val device: String, val at: Long)

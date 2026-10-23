@@ -28,8 +28,8 @@ android {
         // wallpaper telling the system its colours itself, which needs 8.1).
         minSdk = 27
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.1"
+        versionCode = 4
+        versionName = "0.3.0"
     }
 
     signingConfigs {

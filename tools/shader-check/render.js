@@ -82,6 +82,49 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.bindVertexArray(null);
   };
 
+  /**
+   * gl/ScaledTarget.kt: at [scale] < 1 the scene draws into a smaller frame,
+   * scaled up to the screen after; at 1 straight to the screen.
+   */
+  const upscale = program('fullscreen.vert', 'upscale.frag');
+  function scaledTarget(scale) {
+    if (scale >= 0.999) return { width: W, height: H, begin: () => { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); }, end: () => {} };
+    const width = Math.round(W * scale);
+    const height = Math.round(H * scale);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) problems.push('scaled target incomplete');
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    upscale.use();
+    gl.uniform1i(upscale.u('uFrame'), 0);
+    return {
+      width,
+      height,
+      begin: () => {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.viewport(0, 0, width, height);
+      },
+      end: () => {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, W, H);
+        gl.disable(gl.BLEND);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        upscale.use();
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        fullScreen();
+      },
+    };
+  }
+
   /** The screen as a PNG, with its mean brightness by eighths of the height (to compare with the web's). */
   function snapshot(name, note = '') {
     check(`drawing ${name}`);
@@ -120,8 +163,9 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
   }
 
   // --- MATRIX RAIN (scene/rain/RainRenderer.kt) -----------------------------------------
-  function rain(d) {
+  function rain(d, name) {
     const A = d.atlas;
+    const [LW, LH] = d.layer;
     const kana = fonts.kana ? [...d.kana] : [];
     const glyphs = [...kana, ...[...d.base]];
     const slotW = (l) => A.cellW[l] + 2 * A.padSlot;
@@ -177,7 +221,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     // The trail layer (makeLayer).
     const layer = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, layer);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, W, H);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, LW, LH);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -194,7 +238,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     const comp = program('fullscreen.vert', 'rain_composite.frag');
     const fade = program('rain_fade.vert', 'rain_fade.frag');
     const period = d.fadePhases * d.fadeStripe;
-    const perSet = Math.ceil(H / period);
+    const perSet = Math.ceil(LH / period);
     // The instance stream (gl/Gl.kt InstanceStream): column/row, code, alpha.
     const buf = gl.createBuffer();
     const vao = gl.createVertexArray();
@@ -209,7 +253,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
 
     // setOpsUniforms.
     ops.use();
-    gl.uniform2f(ops.u('uTarget'), W, H);
+    gl.uniform2f(ops.u('uTarget'), LW, LH);
     gl.uniform2fv(ops.u('uPitch'), new Float32Array(d.pitch));
     gl.uniform2fv(ops.u('uCell'), new Float32Array([0, 1, 2].flatMap((l) => [A.cellW[l], A.cellH[l]])));
     gl.uniform1fv(ops.u('uOrigin'), new Float32Array(A.originY));
@@ -225,7 +269,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform1i(ops.u('uGlyphs'), 0);
     // drawFades' uniforms.
     fade.use();
-    gl.uniform2f(fade.u('uTarget'), W, H);
+    gl.uniform2f(fade.u('uTarget'), LW, LH);
     gl.uniform1i(fade.u('uPerSet'), perSet);
     gl.uniform1f(fade.u('uStripe'), d.fadeStripe);
     gl.uniform1f(fade.u('uPeriod'), period);
@@ -238,7 +282,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     /** beginLayer, the frame's fades (drawFades), then its records in order (the phone draws them in batches of 4096: the same picture). */
     const draw = (records, fades = []) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.viewport(0, 0, W, H);
+      gl.viewport(0, 0, LW, LH);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       if (fades.length) {
@@ -269,20 +313,23 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     };
     draw(d.prewarm);
     compose();
-    snapshot('rain-open', `${d.prewarm.length / 4} records painted the opening screen;`);
+    snapshot(`${name}-open`, `${d.quality}: layer ${LW}×${LH}; ${d.prewarm.length / 4} records painted the opening screen;`);
     let records = 0;
     for (const f of d.frames) {
       draw(f.records, f.fades);
       records += f.records.length / 4;
     }
     compose();
-    snapshot('rain', `then ${d.frames.length} frames, ${Math.round(records / d.frames.length)} records each;`);
+    snapshot(name, `${d.quality}: then ${d.frames.length} frames, ${Math.round(records / d.frames.length)} records each;`);
   }
 
   // --- NEURAL NET (scene/neural/NeuralRenderer.kt) --------------------------------------
-  function neural(d) {
+  function neural(d, low = false) {
     const g = d.glow;
     const c = d.colors;
+    const t = scaledTarget(low ? d.lowScale : 1);
+    const px = d.density * (low ? d.lowScale : 1);
+    const sparks = low ? d.sparksLow : d.sparks;
     const bg = program('fullscreen.vert', 'neural_bg.frag');
     const bokeh = program('neural_bokeh.vert', 'neural_bokeh.frag');
     const link = program('neural_link.vert', 'neural_link.frag');
@@ -305,8 +352,8 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     set3(bg.u('uAccent'), c.accent);
     for (const p of [bokeh, link, spark]) {
       p.use();
-      gl.uniform2f(p.u('uTargetPx'), W, H);
-      gl.uniform1f(p.u('uDensity'), d.density);
+      gl.uniform2f(p.u('uTargetPx'), t.width, t.height);
+      gl.uniform1f(p.u('uDensity'), px);
       gl.uniform2f(p.u('uScreen'), d.dp[0], d.dp[1]);
       set3(p.u('uCool'), d.coolLifted);
       set3(p.u('uBright'), c.textBright);
@@ -315,11 +362,10 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     link.use();
     gl.uniform1f(link.u('uMaxLink'), d.maxLink);
     spark.use();
-    gl.uniform1f(spark.u('uEdge'), d.edge);
+    gl.uniform1f(spark.u('uEdge'), low ? d.edgeLow : d.edge);
     gl.uniform1f(spark.u('uHalo'), g.halo);
     // render.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, W, H);
+    t.begin();
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.disable(gl.BLEND);
     bg.use();
@@ -332,7 +378,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     link.use();
     gl.uniform4fv(link.u('uNodes'), new Float32Array(d.nodes));
     gl.bindVertexArray(linkVao);
-    if (g.lineGlow > 0) {
+    if (g.lineGlow > 0 && !low) {
       gl.uniform1f(link.u('uWidth'), d.lineWidth * d.glowWidth);
       gl.uniform1f(link.u('uStrength'), g.lineGlow);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, linkCount);
@@ -342,13 +388,16 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, linkCount);
     gl.bindVertexArray(null);
     spark.use();
-    gl.uniform4fv(spark.u('uSparks'), new Float32Array(d.sparks));
-    quads(d.sparks.length / 4);
-    snapshot('neural', `${d.nodes.length / 2} nodes, ${linkCount} links, ${d.sparks.length / 4} sparks, ${d.bokeh.length / 4} bokeh;`);
+    gl.uniform4fv(spark.u('uSparks'), new Float32Array(sparks));
+    quads(sparks.length / 4);
+    t.end();
+    snapshot(low ? 'neural-low' : 'neural', `${low ? `LOW: drawn ${t.width}×${t.height}, no link glow; ` : ''}${d.nodes.length / 2} nodes, ${linkCount} links, ${sparks.length / 4} sparks, ${d.bokeh.length / 4} bokeh;`);
   }
 
   // --- VELOCITY (scene/velocity/VelocityRenderer.kt) ------------------------------------
-  function velocity(d) {
+  function velocity(d, low = false) {
+    const target = scaledTarget(low ? d.lowScale : 1);
+    const px = d.density * (low ? d.lowScale : 1);
     const panel = program('velocity_panel.vert', 'velocity_panel.frag');
     const light = program('velocity_light.vert', 'velocity_light.frag');
     const flare = program('velocity_flare.vert', 'velocity_flare.frag');
@@ -365,8 +414,8 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     // setUniforms.
     const t = d.tones;
     panel.use();
-    gl.uniform2f(panel.u('uTargetPx'), W, H);
-    gl.uniform1f(panel.u('uDensity'), d.density);
+    gl.uniform2f(panel.u('uTargetPx'), target.width, target.height);
+    gl.uniform1f(panel.u('uDensity'), px);
     gl.uniform2f(panel.u('uScreen'), d.dp[0], d.dp[1]);
     gl.uniform1f(panel.u('uScreenH'), d.dp[1]);
     set3(panel.u('uPale'), t.pale);
@@ -375,16 +424,16 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform1f(panel.u('uStriation'), d.striation);
     gl.uniform1i(panel.u('uTile'), 0);
     light.use();
-    gl.uniform2f(light.u('uTargetPx'), W, H);
-    gl.uniform1f(light.u('uDensity'), d.density);
+    gl.uniform2f(light.u('uTargetPx'), target.width, target.height);
+    gl.uniform1f(light.u('uDensity'), px);
     gl.uniform2f(light.u('uScreen'), d.dp[0], d.dp[1]);
     gl.uniform1i(light.u('uLineCount'), d.lines.length / 4);
     set3(light.u('uPale'), t.pale);
     set3(light.u('uRed'), t.red);
     gl.uniform1f(light.u('uGlow'), d.g);
     flare.use();
-    gl.uniform2f(flare.u('uTargetPx'), W, H);
-    gl.uniform1f(flare.u('uDensity'), d.density);
+    gl.uniform2f(flare.u('uTargetPx'), target.width, target.height);
+    gl.uniform1f(flare.u('uDensity'), px);
     gl.uniform3f(flare.u('uBloom'), ...d.bloom);
     gl.uniform3f(flare.u('uArc'), ...d.arc);
     gl.uniform2f(flare.u('uArcSpan'), ...d.span);
@@ -392,14 +441,13 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform1f(flare.u('uArcAlpha'), d.arcAlpha);
     set3(flare.u('uPale'), t.pale);
     set3(flare.u('uFlare'), t.flare);
-    gl.uniform4f(flare.u('uArcBox'), ...d.arcBox);
+    gl.uniform4f(flare.u('uArcBox'), ...(low ? d.arcBoxLow : d.arcBox));
     bg.use();
     set3(bg.u('uBg'), d.colors.bg);
     set3(bg.u('uCool'), d.colors.cool);
     set3(bg.u('uAccent'), d.colors.accent);
     // render.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, W, H);
+    target.begin();
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.enable(gl.BLEND);
@@ -424,12 +472,22 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     bg.use();
     fullScreen();
     gl.disable(gl.BLEND);
-    snapshot('velocity', `${d.panels.length / 4} panels, ${ns} streaks;`);
+    target.end();
+    snapshot(low ? 'velocity-low' : 'velocity', `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${d.panels.length / 4} panels, ${ns} streaks;`);
   }
 
-  for (const [name, fn] of [['rain', rain], ['neural', neural], ['velocity', velocity]]) {
+  // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
+  const runs = [
+    ['rain', () => rain(dumps.rain, 'rain')],
+    ['rain-low', () => rain(dumps['rain-low'], 'rain-low')],
+    ['neural', () => neural(dumps.neural)],
+    ['neural-low', () => neural(dumps.neural, true)],
+    ['velocity', () => velocity(dumps.velocity)],
+    ['velocity-low', () => velocity(dumps.velocity, true)],
+  ];
+  for (const [name, fn] of runs) {
     try {
-      fn(dumps[name]);
+      fn();
     } catch (e) {
       problems.push(`${name}: ${e.message}`);
     }

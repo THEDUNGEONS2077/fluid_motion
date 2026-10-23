@@ -3,8 +3,10 @@
  * wallpaper and its look, the power choices, the app's colours, and the
  * preview's state. Every change is saved at once (settings/Settings.kt),
  * which a running wallpaper hears straight away, and sent to the preview.
- * It also runs MEASURE IMPACT (the battery cost of each rate, measured on
- * the phone: lib/Impact.kt) and gathers COPY DIAGNOSTICS.
+ * It also runs AUTO CALIBRATE (each wallpaper's quality chosen from its
+ * frames' measured cost: lib/Quality.kt), MEASURE IMPACT (the battery cost
+ * of each rate, measured on the phone: lib/Impact.kt), and gathers COPY
+ * DIAGNOSTICS.
  *
  * Layer: ui (Compose state, main thread).
  */
@@ -24,16 +26,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.thedungeons2077.fluidmotion.BuildConfig
+import com.thedungeons2077.fluidmotion.lib.Calibration
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.Impact
 import com.thedungeons2077.fluidmotion.lib.Palette
 import com.thedungeons2077.fluidmotion.lib.PowerChoice
+import com.thedungeons2077.fluidmotion.lib.PowerMode
 import com.thedungeons2077.fluidmotion.lib.PowerState
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.frameRate
 import com.thedungeons2077.fluidmotion.lib.profileFps
 import com.thedungeons2077.fluidmotion.render.FrameStats
 import com.thedungeons2077.fluidmotion.render.RenderLoop
 import com.thedungeons2077.fluidmotion.scene.SceneKind
+import com.thedungeons2077.fluidmotion.settings.Calibrated
 import com.thedungeons2077.fluidmotion.settings.Settings
 import com.thedungeons2077.fluidmotion.wallpaper.MatrixRainService
 import com.thedungeons2077.fluidmotion.wallpaper.NeuralNetService
@@ -44,8 +50,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-/** Where MEASURE IMPACT is: the step's name, its number of [steps], seconds left in it. */
-data class ImpactProgress(val label: String, val step: Int, val steps: Int, val secondsLeft: Int)
+/** A run in progress (MEASURE IMPACT, AUTO CALIBRATE): what it is, the step, its number of [steps], seconds left, what to do meanwhile. */
+data class RunProgress(val title: String, val label: String, val step: Int, val steps: Int, val secondsLeft: Int, val note: String)
+
+/** AUTO CALIBRATE's step: settling time, and the whole step (ms), for the countdown. */
+private const val SETTLE_MS = 1500L
+private const val STEP_MS = SETTLE_MS + 1000L * Calibration.MEASURE_SECONDS
 
 /** The home screen's state. */
 class HomeState(private val context: Context, private val settings: Settings, private val loop: RenderLoop) {
@@ -59,6 +69,16 @@ class HomeState(private val context: Context, private val settings: Settings, pr
 
     /** The power choices (all wallpapers), and the phone's state. */
     var power by mutableStateOf(settings.power)
+        private set
+
+    /** AUTO or MANUAL; MANUAL's quality; AUTO CALIBRATE's result (null until it has run) and what it measured. */
+    var mode by mutableStateOf(settings.mode)
+        private set
+    var manualQuality by mutableStateOf(settings.manualQuality)
+        private set
+    var calibrated by mutableStateOf(settings.calibrated)
+        private set
+    var calibrationReport by mutableStateOf(settings.calibrationReport)
         private set
     var powerState by mutableStateOf(PowerState())
         private set
@@ -80,17 +100,17 @@ class HomeState(private val context: Context, private val settings: Settings, pr
     /** The app in front (the clock only ticks then). */
     var started by mutableStateOf(false)
 
-    /** MEASURE IMPACT in progress (null when not running). */
-    var impact by mutableStateOf<ImpactProgress?>(null)
+    /** MEASURE IMPACT or AUTO CALIBRATE in progress (null when neither is running: one at a time). */
+    var run by mutableStateOf<RunProgress?>(null)
         private set
 
     /** The last MEASURE IMPACT report, and a note when a run couldn't start or stopped early. */
     var impactReport by mutableStateOf(settings.impactReport)
         private set
-    var impactNote by mutableStateOf<String?>(null)
+    var runNote by mutableStateOf<String?>(null)
         private set
 
-    private var impactJob: Job? = null
+    private var runJob: Job? = null
 
     init {
         applyLook()
@@ -125,6 +145,19 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         applyRate()
     }
 
+    fun chooseMode(m: PowerMode) {
+        mode = m
+        settings.mode = m
+        applyLook()
+        applyRate()
+    }
+
+    fun chooseQuality(q: Quality) {
+        manualQuality = q
+        settings.manualQuality = q
+        applyLook()
+    }
+
     fun chooseUiPalette(p: Palette) {
         uiPalette = p
         settings.uiPalette = p
@@ -136,17 +169,120 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         applyRate()
     }
 
-    /** The chosen profile's rate on this display (before battery saver and heat). */
-    val profileFps: Int get() = profileFps(power.profile, powerState.refreshRates)
+    /** The power choices in force: AUTO's calibrated profile (BALANCED until calibrated), or MANUAL's (as Settings.effectivePower). */
+    val effectivePower: PowerChoice
+        get() = if (mode == PowerMode.AUTO) power.copy(profile = calibrated?.profile ?: Calibration.PROFILE) else power
+
+    /** The selected wallpaper's quality in force (as Settings.quality). */
+    val quality: Quality
+        get() = if (mode == PowerMode.AUTO) calibrated?.qualities?.get(selected) ?: Quality.DEFAULT else manualQuality
+
+    /** The profile in force's rate on this display (before battery saver and heat). */
+    val profileFps: Int get() = profileFps(effectivePower.profile, powerState.refreshRates)
 
     /** The rate the preview draws at: the same rule as the wallpaper's. */
-    val fps: Int get() = frameRate(power, powerState)
+    val fps: Int get() = frameRate(effectivePower, powerState)
 
-    private fun applyLook() = loop.setLook(palette.colors, glow)
+    /** What AUTO CALIBRATE measured was another system or screen (an update, a new resolution): worth running again. */
+    val calibrationStale: Boolean get() = calibrated.let { it != null && it.device != deviceKey() }
 
-    /** Sends the rate to the preview (not while MEASURE IMPACT sets its own). */
+    /** This phone's system build and screen, as AUTO CALIBRATE records them. */
+    private fun deviceKey(): String {
+        val m = context.resources.displayMetrics
+        return "${Build.FINGERPRINT}|${m.widthPixels}x${m.heightPixels}@${m.density}"
+    }
+
+    private fun applyLook() = loop.setLook(palette.colors, glow, quality)
+
+    /** Sends the rate to the preview (not while a run sets its own). */
     private fun applyRate() {
-        if (impactJob == null) loop.setRate(fps, power.coolWhenHot)
+        if (runJob == null) loop.setRate(fps, effectivePower.coolWhenHot)
+    }
+
+    /**
+     * Runs AUTO CALIBRATE in [scope]: each wallpaper drawn at each quality
+     * that draws differently on this screen (on the S25 Ultra's FHD+, HIGH
+     * and ULTRA are the same), at AUTO's rate, its frames timed; each gets
+     * the highest quality within budget (lib/Quality.kt Calibration). About
+     * half a minute, on screen, only while the app is in front.
+     */
+    fun startCalibration(scope: CoroutineScope) {
+        if (runJob != null) return
+        runNote = null
+        panelOpen = false
+        val density = context.resources.displayMetrics.density
+        // The steps: per wallpaper, the qualities grouped by what they draw here (each group drawn once).
+        val plan = SceneKind.entries.flatMap { kind ->
+            Quality.entries.groupBy { Calibration.key(it, density, usesLinkGlow = kind == SceneKind.NEURAL) }.values.map { kind to it }
+        }
+        val rate = profileFps(Calibration.PROFILE, powerState.refreshRates)
+        runJob = scope.launch {
+            var finished = false
+            try {
+                loop.setCalibrating(true)
+                loop.setRate(rate, cool = false)
+                val samples = SceneKind.entries.associateWith { mutableListOf<Calibration.Sample>() }
+                plan.forEachIndexed { index, (kind, group) ->
+                    // Drawn at the highest of the group (they all draw the same here). The look first, so a new
+                    // wallpaper's scene is made at this quality (not made, then rebuilt).
+                    val q = group.last()
+                    loop.setLook(settings.palette(kind).colors, settings.glow(kind), q)
+                    loop.setKind(kind)
+                    run = RunProgress(
+                        title = "CALIBRATING",
+                        label = "${kind.label} · ${group.joinToString("/") { it.label }}",
+                        step = index + 1,
+                        steps = plan.size,
+                        secondsLeft = ((plan.size - index) * STEP_MS / 1000).toInt(),
+                        note = "Each wallpaper at each quality, its frames timed: about half a minute.",
+                    )
+                    // Settle (a new quality rebuilds the scene), then two one-second measurements.
+                    delay(SETTLE_MS)
+                    var gpu = 0f
+                    var gpuN = 0
+                    var cpu = 0f
+                    var n = 0
+                    repeat(Calibration.MEASURE_SECONDS) {
+                        delay(1000)
+                        stats?.cost?.let { c ->
+                            cpu += c.cpuMs
+                            n++
+                            if (!c.gpuMs.isNaN()) {
+                                gpu += c.gpuMs
+                                gpuN++
+                            }
+                        }
+                    }
+                    val gpuMs = if (gpuN > 0) gpu / gpuN else Float.NaN
+                    val cpuMs = if (n > 0) cpu / n else 0f
+                    for (each in group) samples.getValue(kind) += Calibration.Sample(each, gpuMs, cpuMs)
+                }
+                val qualities = SceneKind.entries.associateWith { Calibration.choose(samples.getValue(it)) }
+                val chosen = SceneKind.entries.mapNotNull { k -> samples.getValue(k).firstOrNull { it.quality == qualities[k] } }
+                val result = Calibrated(qualities, Calibration.profile(chosen), deviceKey(), System.currentTimeMillis())
+                settings.calibrated = result
+                calibrated = result
+                val report = (listOf("AUTO CALIBRATE · ${Build.MANUFACTURER} ${Build.MODEL} · $rate fps · budget %.0f ms GPU, %.0f ms CPU".format(Locale.UK, Calibration.GPU_BUDGET_MS, Calibration.CPU_BUDGET_MS)) +
+                    SceneKind.entries.map { k ->
+                        "${k.label} → ${qualities.getValue(k).label}: " + samples.getValue(k).joinToString(" · ") {
+                            "${it.quality.label} GPU ${if (it.gpuMs.isNaN()) "n/a" else "%.2f".format(Locale.UK, it.gpuMs)} CPU %.2f".format(Locale.UK, it.cpuMs)
+                        }
+                    } + "rate: ${result.profile.label}").joinToString("\n")
+                settings.calibrationReport = report
+                calibrationReport = report
+                finished = true
+            } finally {
+                loop.setCalibrating(false)
+                if (!finished) runNote = "CALIBRATION STOPPED: run it again with the app in front."
+                run = null
+                runJob = null
+                // Back to the wallpaper shown, as it was (with AUTO's new choice if it's in force).
+                applyLook()
+                loop.setKind(selected)
+                applyRate()
+                panelOpen = true
+            }
+        }
     }
 
     /**
@@ -157,20 +293,20 @@ class HomeState(private val context: Context, private val settings: Settings, pr
      * then), and keeps going only while the app is in front.
      */
     fun startImpact(scope: CoroutineScope) {
-        if (impactJob != null) return
+        if (runJob != null) return
         val battery = context.getSystemService(BatteryManager::class.java)
         val sticky = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         if ((sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0) {
-            impactNote = "UNPLUG THE PHONE FIRST: the battery's current is only the phone's own when it isn't charging."
+            runNote = "UNPLUG THE PHONE FIRST: the battery's current is only the phone's own when it isn't charging."
             return
         }
         if (Impact.milliamps(battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)) == null) {
-            impactNote = "THIS PHONE DOESN'T REPORT ITS BATTERY CURRENT: the frame costs in STATUS are what there is."
+            runNote = "THIS PHONE DOESN'T REPORT ITS BATTERY CURRENT: the frame costs in STATUS are what there is."
             return
         }
-        impactNote = null
+        runNote = null
         panelOpen = false
-        impactJob = scope.launch {
+        runJob = scope.launch {
             var finished = false
             try {
                 val results = mutableListOf<Impact.Result>()
@@ -186,7 +322,14 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     var drawn = 0f
                     var costN = 0
                     for (second in 0 until Impact.STEP_SECONDS) {
-                        impact = ImpactProgress(step.label, index + 1, steps.size, Impact.STEP_SECONDS - second)
+                        run = RunProgress(
+                            title = "MEASURING IMPACT",
+                            label = step.label,
+                            step = index + 1,
+                            steps = steps.size,
+                            secondsLeft = Impact.STEP_SECONDS - second,
+                            note = "Leave the phone alone and the brightness as it is: about three minutes in all.",
+                        )
                         delay(1000)
                         if (second < Impact.SETTLE_SECONDS) continue
                         Impact.milliamps(battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW))?.let { samples[n++] = it }
@@ -215,23 +358,23 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER),
                     battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY),
                 )
-                val report = Impact.report(results, capacity, "${selected.label} · ${palette.label} · GLOW ${glow.label} · ${Build.MANUFACTURER} ${Build.MODEL}")
+                val report = Impact.report(results, capacity, "${selected.label} · ${palette.label} · GLOW ${glow.label} · QUALITY ${quality.label} · ${Build.MANUFACTURER} ${Build.MODEL}")
                 impactReport = report
                 settings.impactReport = report
                 finished = true
             } finally {
-                if (!finished) impactNote = "MEASURE IMPACT STOPPED: run it again with the app in front and the phone left alone."
-                impact = null
-                impactJob = null
+                if (!finished) runNote = "MEASURE IMPACT STOPPED: run it again with the app in front and the phone left alone."
+                run = null
+                runJob = null
                 applyRate()
                 panelOpen = true
             }
         }
     }
 
-    /** Stops MEASURE IMPACT (the app went to the background, or CANCEL). */
-    fun cancelImpact() {
-        impactJob?.cancel()
+    /** Stops MEASURE IMPACT or AUTO CALIBRATE (the app went to the background, or CANCEL). */
+    fun cancelRun() {
+        runJob?.cancel()
     }
 
     /** The battery's temperature (°C), from the last battery broadcast; NaN if unknown. */
@@ -253,7 +396,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
             "fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
             "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · display Hz $modes",
             loop.info,
-            "wallpaper ${selected.label} · ${palette.label} · GLOW ${glow.label} · ${power.profile.label} ($profileFps fps)" +
+            "wallpaper ${selected.label} · ${palette.label} · GLOW ${glow.label} · ${mode.label} · ${effectivePower.profile.label} ($profileFps fps) · QUALITY ${quality.label}" +
                 " · still in saver ${power.stillInSaver} · cool when hot ${power.coolWhenHot}",
             "phone: battery saver ${powerState.powerSave} · thermal status ${powerState.thermal}",
             if (s == null) {
@@ -265,6 +408,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     s.cost.late * 100, s.eased, if (s.headroom.isNaN()) "n/a" else "%.2f".format(Locale.UK, s.headroom),
                 ) + (s.failure?.let { " · FAILED: $it" } ?: "")
             },
+            calibrationReport.ifEmpty { "AUTO CALIBRATE: not run yet" } + if (calibrationStale) " (measured on another system or screen)" else "",
             impactReport.ifEmpty { "MEASURE IMPACT: not run yet" },
         ).joinToString("\n")
         val clipboard = context.getSystemService(ClipboardManager::class.java)

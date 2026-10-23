@@ -17,9 +17,9 @@
  * the stripes are built on the GPU (rain_fade.vert). Fades and glyph
  * records are flushed in the simulation's order (one waits for the other).
  *
- * The trail layer is drawn at the screen's own resolution up to
- * MAX_PX_PER_DP (beyond that the glyphs are as sharp as the eye can tell,
- * and every pixel is memory traffic). A new palette applies to glyphs drawn
+ * The trail layer is drawn at the resolution QUALITY allows (lib/Quality.kt:
+ * HIGH, up to 3 px per dp, is full resolution on most phones; every pixel
+ * is memory traffic) and the composite scales it up to the screen. A new palette applies to glyphs drawn
  * from then on, so the change rains in, as on the web; a new glow level
  * draws a new atlas, the same way.
  */
@@ -36,6 +36,7 @@ import com.thedungeons2077.fluidmotion.gl.uniformRgb
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.desaturate
 import com.thedungeons2077.fluidmotion.lib.rain.RainParams
 import com.thedungeons2077.fluidmotion.lib.rain.RainRecorder
@@ -44,9 +45,6 @@ import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.scene.Scene
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-/** The trail layer's sharpest: px per dp (the S25 Ultra at its default FHD+ is 2.8: drawn at full resolution). */
-private const val MAX_PX_PER_DP = 3f
 
 /** Instance records per draw (the pre-warm's paint takes several; a frame, one). */
 private const val BATCH = 4096
@@ -69,6 +67,11 @@ class RainRenderer(private val context: Context) : Scene {
 
     private var colors: PaletteColors = Palettes.PHOSPHOR.colors
     private var glow = GlowLevel.DEFAULT
+    private var quality = Quality.DEFAULT
+
+    // Rebuilds asked for, done at the next frame (with the context current): a new atlas (glow), or everything (quality).
+    private var atlasDirty = false
+    private var rebuild = false
     private var atlas: GlyphAtlas? = null
     private var sim: RainSim? = null
 
@@ -138,7 +141,7 @@ class RainRenderer(private val context: Context) : Scene {
         screenW = width
         screenH = height
         this.density = density
-        val scale = min(1f, MAX_PX_PER_DP / density)
+        val scale = quality.scale(density)
         val nextPx = density * scale
         // A new atlas only if the glyphs' size changed.
         if (atlas == null || nextPx != pxPerDp) {
@@ -226,6 +229,21 @@ class RainRenderer(private val context: Context) : Scene {
     }
 
     override fun render(dt: Float) {
+        if (rebuild) {
+            // A new quality: a new layer (and atlas, if its size changed), the screen opening full again.
+            rebuild = false
+            atlasDirty = false
+            val w = screenW
+            screenW = 0
+            resize(w, screenH, density)
+        }
+        if (atlasDirty) {
+            // A new glow: new sprites. Glyphs already down fade out as usual, so the change rains in.
+            atlasDirty = false
+            atlas?.release()
+            atlas = GlyphAtlas.build(typeface, pxPerDp, RainParams.GLOW.getValue(glow)).also { recorder.slotOf = it.slotOf }
+            opsDirty = true
+        }
         val s = sim ?: return
         // 1. The trail layer: this frame's fades, erases and glyphs.
         beginLayer()
@@ -259,13 +277,13 @@ class RainRenderer(private val context: Context) : Scene {
     override fun setGlow(glow: GlowLevel) {
         if (glow == this.glow) return
         this.glow = glow
-        // New sprites; glyphs already down fade out as usual, so the change rains in.
-        if (atlas != null) {
-            atlas?.release()
-            atlas = GlyphAtlas.build(typeface, pxPerDp, RainParams.GLOW.getValue(glow))
-            recorder.slotOf = atlas!!.slotOf
-        }
-        opsDirty = true
+        if (atlas != null) atlasDirty = true
+    }
+
+    override fun setQuality(quality: Quality) {
+        if (quality == this.quality) return
+        this.quality = quality
+        if (sim != null) rebuild = true
     }
 
     override fun release() {

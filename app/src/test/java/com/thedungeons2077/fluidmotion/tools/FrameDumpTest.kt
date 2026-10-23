@@ -14,6 +14,7 @@ package com.thedungeons2077.fluidmotion.tools
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.desaturate
 import com.thedungeons2077.fluidmotion.lib.mixRgb
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralFrame
@@ -66,9 +67,19 @@ class FrameDumpTest {
 
     @Test
     fun `rain as the phone draws it`() {
+        dumpRain(Quality.HIGH, "rain.json")
+        // LOW draws a smaller trail layer with a smaller atlas: the same rain (the same seed), scaled up.
+        dumpRain(Quality.LOW, "rain-low.json")
+    }
+
+    /** The rain at [quality], to [name]. */
+    private fun dumpRain(quality: Quality, name: String) {
+        val px = density * quality.scale(density)
+        val layerW = Math.round(w * quality.scale(density))
+        val layerH = Math.round(h * quality.scale(density))
         val palette = Palettes.PHOSPHOR.colors
         val glow = RainParams.GLOW.getValue(GlowLevel.HIGH)
-        val at = AtlasLayout(density, glow, KATAKANA.length + BASE_GLYPHS.length)
+        val at = AtlasLayout(px, glow, KATAKANA.length + BASE_GLYPHS.length)
         val slots = glyphSlots(KATAKANA.length, BASE_GLYPHS.length)
         var buf = FloatArray(1 shl 16)
         var n = 0
@@ -95,9 +106,9 @@ class FrameDumpTest {
             frames.append(",\"records\":").append(buf.copyOf(n).joinToString(",", "[", "]")).append('}')
         }
         frames.append(']')
-        val pitch = FloatArray(6) { if (it % 2 == 0) RainParams.LAYERS[it / 2].colW * density else RainParams.LAYERS[it / 2].rowH * density }
+        val pitch = FloatArray(6) { if (it % 2 == 0) RainParams.LAYERS[it / 2].colW * px else RainParams.LAYERS[it / 2].rowH * px }
         val json = Json()
-            .ints("screen", intArrayOf(w, h)).num("pxPerDp", density)
+            .ints("screen", intArrayOf(w, h)).ints("layer", intArrayOf(layerW, layerH)).num("pxPerDp", px).str("quality", quality.label)
             .raw("glow", Json().num("alpha", glow.alpha).num("head", glow.head).num("headLayers", glow.headLayers).num("body", glow.body).done())
             .raw(
                 "atlas",
@@ -106,12 +117,12 @@ class FrameDumpTest {
                     .ints("cellW", at.cellW).ints("cellH", at.cellH).ints("fontPx", at.fontPx).ints("originY", at.originY).done(),
             )
             .str("kana", KATAKANA).str("base", BASE_GLYPHS)
-            .floats("pitch", pitch).num("fadeStripe", RainParams.FADE_STRIPE).num("fadePhases", RainParams.FADE_PHASES).num("fadeAlpha", RainParams.FADE_ALPHA).num("eraseStroke", 0.5f * density)
+            .floats("pitch", pitch).num("fadeStripe", RainParams.FADE_STRIPE).num("fadePhases", RainParams.FADE_PHASES).num("fadeAlpha", RainParams.FADE_ALPHA).num("eraseStroke", 0.5f * px)
             .raw("colors", colors(palette))
             .num("body", desaturate(palette.text, RainParams.BODY_DESATURATE)).num("dim", desaturate(palette.textDim, RainParams.BODY_DESATURATE))
             .floats("prewarm", prewarm).raw("frames", frames.toString())
             .done()
-        File(out, "rain.json").writeText(json)
+        File(out, name).writeText(json)
         assertTrue(prewarm.size > 1000)
     }
 
@@ -127,15 +138,20 @@ class FrameDumpTest {
         val bokeh = FloatArray(NeuralFrame.MAX_BOKEH * 4)
         val pairs = NeuralFrame.nodes(sim, nodes)
         val ns = NeuralFrame.sparks(sim, glow.haloSize, density, sparks)
+        // At LOW the sprites are sized for its px per dp (a whole number of its px).
+        val sparksLow = FloatArray(NeuralFrame.MAX_SPARKS * 4)
+        NeuralFrame.sparks(sim, glow.haloSize, density * Quality.LOW.scale(density), sparksLow)
         val nb = NeuralFrame.bokeh(sim, bokeh)
         val links = FloatArray(sim.links.size / 2 * 3) { i -> if (i % 3 == 2) sim.weight[i / 3] else sim.links[2 * (i / 3) + i % 3].toFloat() }
         val json = Json()
             .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(sim.w, sim.h))
+            .num("lowScale", Quality.LOW.scale(density))
             .raw("colors", colors(palette)).num("coolLifted", mixRgb(palette.cool, 0xffffff, 0.4f))
             .raw("glow", Json().num("halo", glow.halo).num("haloSize", glow.haloSize).num("lineGlow", glow.lineGlow).done())
             .num("lineWidth", NeuralParams.LINE_WIDTH).num("glowWidth", NeuralFrame.GLOW_WIDTH).num("maxLink", sim.maxLink)
             .num("edge", 1f / NeuralFrame.spriteScale(glow.haloSize, density))
-            .floats("links", links).floats("nodes", nodes, pairs * 4).floats("bokeh", bokeh, nb * 4).floats("sparks", sparks, ns * 4)
+            .num("edgeLow", 1f / NeuralFrame.spriteScale(glow.haloSize, density * Quality.LOW.scale(density)))
+            .floats("links", links).floats("nodes", nodes, pairs * 4).floats("bokeh", bokeh, nb * 4).floats("sparks", sparks, ns * 4).floats("sparksLow", sparksLow, ns * 4)
             .done()
         File(out, "neural.json").writeText(json)
         assertTrue(ns > 0)
@@ -159,9 +175,12 @@ class FrameDumpTest {
         val nl = VelocityFrame.lines(sim, g, lines)
         val ns = VelocityFrame.streaks(sim, streaks, looks)
         VelocityFrame.arcBox(sim, density, box)
+        val boxLow = FloatArray(4)
+        VelocityFrame.arcBox(sim, density * Quality.LOW.scale(density), boxLow)
         val tones = velocityTones(palette)
         val json = Json()
             .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(sim.w, sim.h))
+            .num("lowScale", Quality.LOW.scale(density))
             .raw("colors", colors(palette))
             .raw("tones", Json().num("pale", tones.pale).num("red", tones.red).num("flare", tones.flare).done())
             .num("g", g).num("soft", VelocityParams.SOFT_EDGE).num("striation", VelocityParams.STRIATION)
@@ -169,7 +188,7 @@ class FrameDumpTest {
             .floats("panels", panels, np * 4).floats("lines", lines, nl * 4).floats("streaks", streaks, ns * 4).floats("looks", looks, ns * 4)
             .floats("bloom", floatArrayOf(sim.flareX, sim.flareY, sim.flareR)).floats("arc", floatArrayOf(sim.arcX, sim.arcY, sim.arcR))
             .floats("span", floatArrayOf(VelocityParams.ARC_FROM, VelocityParams.ARC_TO)).num("arcHalf", VelocityParams.ARC_WIDTH / 2f)
-            .num("arcAlpha", VelocityParams.ARC_ALPHA).num("strength", VelocityFrame.flareStrength(sim, g)).floats("arcBox", box)
+            .num("arcAlpha", VelocityParams.ARC_ALPHA).num("strength", VelocityFrame.flareStrength(sim, g)).floats("arcBox", box).floats("arcBoxLow", boxLow)
             .done()
         File(out, "velocity.json").writeText(json)
         assertTrue(np == 4)

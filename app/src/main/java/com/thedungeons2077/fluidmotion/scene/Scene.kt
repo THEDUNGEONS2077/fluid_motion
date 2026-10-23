@@ -12,6 +12,7 @@ package com.thedungeons2077.fluidmotion.scene
 import android.content.Context
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.scene.neural.NeuralRenderer
 import com.thedungeons2077.fluidmotion.scene.rain.RainRenderer
 import com.thedungeons2077.fluidmotion.scene.velocity.VelocityRenderer
@@ -29,6 +30,13 @@ interface Scene {
 
     /** A new glow level. */
     fun setGlow(glow: GlowLevel)
+
+    /**
+     * A new detail level (lib/Quality.kt: mostly the resolution drawn at).
+     * Any rebuilding it needs waits for the next frame, when the context is
+     * sure to be current.
+     */
+    fun setQuality(quality: Quality)
 
     /** Frees its GL objects. */
     fun release()

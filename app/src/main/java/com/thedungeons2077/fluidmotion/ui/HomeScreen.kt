@@ -45,6 +45,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import com.thedungeons2077.fluidmotion.lib.PowerMode
+import com.thedungeons2077.fluidmotion.lib.Quality
+import kotlin.math.roundToInt
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.thedungeons2077.fluidmotion.BuildConfig
@@ -66,7 +72,7 @@ import java.util.Locale
 fun HomeScreen(state: HomeState, loop: RenderLoop) {
     val d = state.uiPalette.colors.toDeck()
     val scope = rememberCoroutineScope()
-    val measuring = state.impact != null
+    val measuring = state.run != null
     // The screen stays on while measuring (a run is about three minutes).
     val view = LocalView.current
     DisposableEffect(measuring) {
@@ -95,10 +101,15 @@ fun HomeScreen(state: HomeState, loop: RenderLoop) {
                     .padding(DeckSize.lg),
             ) {
                 Brand(state.started)
-                state.impact?.let { Measuring(it, state::cancelImpact) }
+                state.run?.let { Running(it, state::cancelRun) }
                 Spacer(Modifier.weight(1f))
                 if (state.panelOpen) {
-                    Controls(state, { state.startImpact(scope) }, Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.62f).dp))
+                    Controls(
+                        state,
+                        onMeasure = { state.startImpact(scope) },
+                        onCalibrate = { state.startCalibration(scope) },
+                        modifier = Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.62f).dp),
+                    )
                     Spacer(Modifier.height(DeckSize.sm))
                 }
                 if (!measuring) {
@@ -148,12 +159,12 @@ private fun rememberNow(ticking: Boolean): Long {
 }
 
 /**
- * MEASURE IMPACT under way: which step, how long left, and how to stop.
- * It changes once a second in every step alike, so it doesn't skew the
- * comparison between them.
+ * MEASURE IMPACT or AUTO CALIBRATE under way: which step, how long left,
+ * and how to stop. For MEASURE IMPACT it changes once a second in every
+ * step alike, so it doesn't skew the comparison between them.
  */
 @Composable
-private fun Measuring(p: ImpactProgress, onCancel: () -> Unit) {
+private fun Running(p: RunProgress, onCancel: () -> Unit) {
     val d = LocalDeck.current
     val shape = RoundedCornerShape(DeckSize.radius)
     Column(
@@ -165,15 +176,15 @@ private fun Measuring(p: ImpactProgress, onCancel: () -> Unit) {
             .padding(DeckSize.md),
         verticalArrangement = Arrangement.spacedBy(DeckSize.xs),
     ) {
-        DeckText("MEASURING IMPACT · ${p.label} (${p.step}/${p.steps}) · ${p.secondsLeft} S", DeckType.section, d.textBright, glow = d.glowText)
-        DeckText("Leave the phone alone and the brightness as it is: about three minutes in all.", DeckType.detail, d.textDim)
+        DeckText("${p.title} · ${p.label} (${p.step}/${p.steps}) · ${p.secondsLeft} S", DeckType.section, d.textBright, glow = d.glowText)
+        DeckText(p.note, DeckType.detail, d.textDim)
         DeckButton("CANCEL", onCancel, Modifier.fillMaxWidth())
     }
 }
 
-/** The controls panel: what to show, its colours and glow, power, the app's colours, the status and its tools. */
+/** The controls panel: what to show, its colours and glow, power and quality, the app's colours, the status and its tools. */
 @Composable
-private fun Controls(state: HomeState, onMeasure: () -> Unit, modifier: Modifier) {
+private fun Controls(state: HomeState, onMeasure: () -> Unit, onCalibrate: () -> Unit, modifier: Modifier) {
     val d = LocalDeck.current
     val shape = RoundedCornerShape(DeckSize.radius)
     Column(
@@ -201,13 +212,30 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, modifier: Modifier
         Segmented(GlowLevel.entries.map { it.label }, state.glow.ordinal, { state.chooseGlow(GlowLevel.entries[it]) })
 
         SectionTitle("POWER")
-        Segmented(PowerProfile.entries.map { it.label }, state.power.profile.ordinal, { state.choosePower(state.power.copy(profile = PowerProfile.entries[it])) })
-        DeckText(
-            "${state.profileFps} frames a second on this display while the wallpaper is on screen; nothing at all while it's hidden.",
-            DeckType.detail,
-            d.textDim,
-            Modifier.padding(top = DeckSize.sm, bottom = DeckSize.xs),
-        )
+        Segmented(PowerMode.entries.map { it.label }, state.mode.ordinal, { state.chooseMode(PowerMode.entries[it]) })
+        if (state.mode == PowerMode.AUTO) {
+            DeckText(autoText(state), DeckType.detail, d.text, Modifier.padding(top = DeckSize.sm, bottom = DeckSize.sm))
+            DeckButton(
+                if (state.calibrated == null) "AUTO CALIBRATE" else "CALIBRATE AGAIN",
+                onCalibrate,
+                Modifier.fillMaxWidth(),
+                primary = state.calibrated == null || state.calibrationStale,
+                label = "time each wallpaper at each quality on this phone, about half a minute",
+            )
+        } else {
+            Spacer(Modifier.height(DeckSize.sm))
+            Segmented(PowerProfile.entries.map { it.label }, state.power.profile.ordinal, { state.choosePower(state.power.copy(profile = PowerProfile.entries[it])) })
+            DeckText(
+                "${state.profileFps} frames a second on this display while the wallpaper is on screen; nothing at all while it's hidden.",
+                DeckType.detail,
+                d.textDim,
+                Modifier.padding(top = DeckSize.sm, bottom = DeckSize.sm),
+            )
+            DeckText("QUALITY", DeckType.small, d.textDim, Modifier.padding(bottom = DeckSize.xs).semantics { heading() })
+            Segmented(Quality.entries.map { it.label }, state.manualQuality.ordinal, { state.chooseQuality(Quality.entries[it]) })
+            DeckText(qualityText(state.manualQuality), DeckType.detail, d.textDim, Modifier.padding(top = DeckSize.sm))
+        }
+        Spacer(Modifier.height(DeckSize.xs))
         Toggle("STILL IN BATTERY SAVER", "A still frame while battery saver is on.", state.power.stillInSaver, { state.choosePower(state.power.copy(stillInSaver = it)) })
         Toggle("COOL DOWN WHEN HOT", "SMOOTH eases to 30 as the phone nears its heat limit; half the frames when warm, a still frame when hot.", state.power.coolWhenHot, { state.choosePower(state.power.copy(coolWhenHot = it)) })
 
@@ -222,7 +250,7 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, modifier: Modifier
             DeckButton("MEASURE IMPACT", onMeasure, Modifier.fillMaxWidth(), label = "measure the battery cost of each rate, about three minutes")
             DeckButton("COPY DIAGNOSTICS", state::copyDiagnostics, Modifier.fillMaxWidth(), label = "copy this phone's numbers to paste")
         }
-        state.impactNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(bottom = DeckSize.sm)) }
+        state.runNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(bottom = DeckSize.sm)) }
         DeckText(
             state.impactReport.ifEmpty { "MEASURE IMPACT shows what each rate costs the battery on this phone: unplug it first." },
             DeckType.detail,
@@ -230,6 +258,26 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, modifier: Modifier
             Modifier.padding(bottom = DeckSize.sm),
         )
     }
+}
+
+/** AUTO's choice, or what it will do before it's been calibrated. */
+private fun autoText(state: HomeState): String {
+    val c = state.calibrated
+        ?: return "AUTO finds the balance for this phone: 30 frames a second (where the screen can slow down too) and the sharpest " +
+            "quality each wallpaper draws cheaply here. Not calibrated yet: until then BALANCED, QUALITY HIGH."
+    val each = SceneKind.entries.joinToString(" · ") { "${it.label} ${c.qualities[it]?.label ?: Quality.DEFAULT.label}" }
+    val stale = if (state.calibrationStale) "\nThe system or screen has changed since: calibrate again." else ""
+    return "Calibrated for this phone: ${c.profile.label} (${state.profileFps} fps) · QUALITY $each$stale"
+}
+
+/** What a quality means on this phone. */
+@Composable
+private fun qualityText(q: Quality): String {
+    val density = LocalDensity.current.density
+    val share = (q.scale(density) * 100).roundToInt()
+    val res = if (share >= 100) "full resolution" else "$share% of the screen's resolution, scaled up smoothly"
+    val glow = if (q.linkGlow) "" else "; NEURAL NET without its links' soft glow"
+    return "${q.label}: drawn at $res$glow. Lower costs the GPU less on weaker phones."
 }
 
 /** What the preview is doing and why, and what its frames cost (measured), in a line or two. */

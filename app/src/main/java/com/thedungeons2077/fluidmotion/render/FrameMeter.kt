@@ -32,6 +32,15 @@ class FrameMeter {
     var gpuTimer = false
         private set
 
+    /**
+     * Where the GPU can't be timed, time each frame to its end instead
+     * (glFinish: the CPU waits for the GPU, so it's only for calibrating:
+     * an upper bound on the GPU's time, CPU work included).
+     */
+    var sync = false
+
+    private var wallStart = 0L
+
     private val queries = IntArray(RING)
     private val pending = BooleanArray(RING)
     private var slot = 0
@@ -60,6 +69,7 @@ class FrameMeter {
     /** A frame starts: [late] if it came more than half an interval after it was due. */
     fun begin(late: Boolean) {
         cpuStart = threadTime()
+        wallStart = System.nanoTime()
         if (late) lateFrames++
         if (!gpuTimer) return
         collect()
@@ -70,6 +80,11 @@ class FrameMeter {
 
     /** The frame's GL work is all issued (call before the swap). */
     fun endGpu() {
+        if (!gpuTimer && sync) {
+            GLES30.glFinish()
+            gpuNs += System.nanoTime() - wallStart
+            gpuFrames++
+        }
         if (!timing) return
         GLES30.glEndQuery(TIME_ELAPSED_EXT)
         pending[slot] = true
