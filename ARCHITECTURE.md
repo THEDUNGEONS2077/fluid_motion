@@ -65,6 +65,13 @@ The objective is no hit to battery or performance. How it's met:
   - **What it picks.** Each wallpaper gets the highest quality within 3 ms GPU and 3 ms CPU, and the rate is BALANCED. If even the chosen quality is over budget, the rate is ECO.
   - **Where it's kept.** The result is stored with the system build and screen (`Settings.calibrated`). The wallpapers read the quality and profile in force through `Settings.quality(kind)` and `effectivePower()`.
 
+## INSIGHT
+- **The log.** `lib/Usage.kt` keeps time on screen per wallpaper and rate (`matrix-rain@30`; rate 0 is still), frames, and CPU and GPU time, hour by hour, for a week.
+  - `render/UsageRecorder.kt` keeps it for the wallpaper engines only (not the previews).
+  - Spans open and close on visibility, rate, easing and kind changes. Frames come from FrameMeter's running totals.
+  - It writes to `render/UsageStore.kt` (SharedPreferences `fluid_motion_usage`, one locked read, add and write) when the wallpaper goes off screen, and every 10 min between drawn frames. No timers, nothing per frame.
+- **The estimate.** `CostModel` turns time at each rate into mAh. It uses MEASURE IMPACT's measured extra current, latest per wallpaper and rate (`Settings.impactModel`), then the same rate on another wallpaper, then the measured mA per fps, then a typical 1.2 mA per fps.
+
 ## Lifecycle
 - **Engines.** The system makes one engine per running copy: home screen, lock screen, and the picker's preview. Each has its own `RenderLoop` (thread and EGL context); the EGL display is shared and never terminated.
 - **The app's preview.** It is a SurfaceView with its own loop. It runs between `onStart` and `onStop`, and is released in `onDestroy`.

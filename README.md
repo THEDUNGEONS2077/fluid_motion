@@ -36,6 +36,11 @@ You can change the colours, glow and power settings any time, even while the wal
 - **STILL IN BATTERY SAVER:** a still frame while battery saver is on.
 - **COOL DOWN WHEN HOT:** SMOOTH eases to 30 as the phone nears its heat limit; half the frames when it's warm, a still frame when it's hot.
 
+**INSIGHT:**
+- It shows how long the wallpaper was on screen today and over the last 7 days, and what that cost in battery (estimated).
+- The estimate comes from MEASURE IMPACT's numbers for your phone, once you've run it.
+- Keeping this log doesn't wake the phone or add work to frames.
+
 **STATUS:**
 - It shows what each frame costs, measured: CPU and GPU time, and late frames.
 - **MEASURE IMPACT** measures the battery cost of each rate on your phone, in about three minutes. Unplug the phone first.

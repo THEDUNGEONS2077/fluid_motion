@@ -5,8 +5,8 @@
  * which a running wallpaper hears straight away, and sent to the preview.
  * It also runs AUTO CALIBRATE (each wallpaper's quality chosen from its
  * frames' measured cost: lib/Quality.kt), MEASURE IMPACT (the battery cost
- * of each rate, measured on the phone: lib/Impact.kt), and gathers COPY
- * DIAGNOSTICS.
+ * of each rate, measured on the phone: lib/Impact.kt), shows INSIGHT (the
+ * wallpapers' week: lib/Usage.kt), and gathers COPY DIAGNOSTICS.
  *
  * Layer: ui (Compose state, main thread).
  */
@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.thedungeons2077.fluidmotion.BuildConfig
 import com.thedungeons2077.fluidmotion.lib.Calibration
+import com.thedungeons2077.fluidmotion.lib.CostModel
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.Impact
 import com.thedungeons2077.fluidmotion.lib.Palette
@@ -34,10 +35,13 @@ import com.thedungeons2077.fluidmotion.lib.PowerChoice
 import com.thedungeons2077.fluidmotion.lib.PowerMode
 import com.thedungeons2077.fluidmotion.lib.PowerState
 import com.thedungeons2077.fluidmotion.lib.Quality
+import com.thedungeons2077.fluidmotion.lib.Usage
+import com.thedungeons2077.fluidmotion.lib.UsageDay
 import com.thedungeons2077.fluidmotion.lib.frameRate
 import com.thedungeons2077.fluidmotion.lib.profileFps
 import com.thedungeons2077.fluidmotion.render.FrameStats
 import com.thedungeons2077.fluidmotion.render.RenderLoop
+import com.thedungeons2077.fluidmotion.render.UsageStore
 import com.thedungeons2077.fluidmotion.scene.SceneKind
 import com.thedungeons2077.fluidmotion.settings.Calibrated
 import com.thedungeons2077.fluidmotion.settings.Settings
@@ -48,6 +52,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Locale
 
 /** A run in progress (MEASURE IMPACT, AUTO CALIBRATE): what it is, the step, its number of [steps], seconds left, what to do meanwhile. */
@@ -111,6 +117,14 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         private set
 
     private var runJob: Job? = null
+
+    /** INSIGHT: the last seven days (oldest first, today last), whether the estimate is from this phone's measurements, the battery's size (mAh; null if unknown). */
+    var usageDays by mutableStateOf<List<UsageDay>>(emptyList())
+        internal set
+    var costFromThisPhone by mutableStateOf(false)
+        internal set
+    var capacityMah by mutableStateOf<Float?>(null)
+        internal set
 
     init {
         applyLook()
@@ -262,7 +276,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                 val result = Calibrated(qualities, Calibration.profile(chosen), deviceKey(), System.currentTimeMillis())
                 settings.calibrated = result
                 calibrated = result
-                val report = (listOf("AUTO CALIBRATE · ${Build.MANUFACTURER} ${Build.MODEL} · $rate fps · budget %.0f ms GPU, %.0f ms CPU".format(Locale.UK, Calibration.GPU_BUDGET_MS, Calibration.CPU_BUDGET_MS)) +
+                val report = (listOf("AUTO CALIBRATE · ${stamp()} · ${Build.MANUFACTURER} ${Build.MODEL} · $rate fps · budget %.0f ms GPU, %.0f ms CPU".format(Locale.UK, Calibration.GPU_BUDGET_MS, Calibration.CPU_BUDGET_MS)) +
                     SceneKind.entries.map { k ->
                         "${k.label} → ${qualities.getValue(k).label}: " + samples.getValue(k).joinToString(" · ") {
                             "${it.quality.label} GPU ${if (it.gpuMs.isNaN()) "n/a" else "%.2f".format(Locale.UK, it.gpuMs)} CPU %.2f".format(Locale.UK, it.cpuMs)
@@ -358,9 +372,15 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER),
                     battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY),
                 )
-                val report = Impact.report(results, capacity, "${selected.label} · ${palette.label} · GLOW ${glow.label} · QUALITY ${quality.label} · ${Build.MANUFACTURER} ${Build.MODEL}")
+                val report = Impact.report(results, capacity, "${stamp()} · ${selected.label} · ${palette.label} · GLOW ${glow.label} · QUALITY ${quality.label} · ${Build.MANUFACTURER} ${Build.MODEL}")
                 impactReport = report
                 settings.impactReport = report
+                // What each rate adds for this wallpaper, for INSIGHT's estimates (the latest per wallpaper and rate).
+                val base = results.first { it.fps == 0 }.mA
+                val model = CostModel.decode(settings.impactModel).toMutableMap()
+                for (r in results) if (r.fps > 0 && !r.mA.isNaN() && !base.isNaN()) model[Usage.key(selected.id, r.fps)] = r.mA - base
+                settings.impactModel = CostModel.encode(model)
+                refreshUsage()
                 finished = true
             } finally {
                 if (!finished) runNote = "MEASURE IMPACT STOPPED: run it again with the app in front and the phone left alone."
@@ -371,6 +391,22 @@ class HomeState(private val context: Context, private val settings: Settings, pr
             }
         }
     }
+
+    /** Reads INSIGHT's log again (the app comes to the front; a wallpaper wrote to it). */
+    fun refreshUsage() {
+        val model = CostModel(CostModel.decode(settings.impactModel))
+        costFromThisPhone = model.fromThisPhone
+        usageDays = Usage.days(UsageStore.read(context), model, ZoneId.systemDefault(), LocalDate.now())
+        val battery = context.getSystemService(BatteryManager::class.java)
+        capacityMah = Impact.capacityMah(
+            battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER),
+            battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY),
+        )
+    }
+
+    /** What a report says about when and with what it was made: the version and the time (so an old one is plain to see). */
+    private fun stamp(): String = "fluid_motion ${BuildConfig.VERSION_NAME} · " +
+        java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.UK))
 
     /** Stops MEASURE IMPACT or AUTO CALIBRATE (the app went to the background, or CANCEL). */
     fun cancelRun() {

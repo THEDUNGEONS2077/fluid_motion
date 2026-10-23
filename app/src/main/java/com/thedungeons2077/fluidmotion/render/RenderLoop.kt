@@ -72,8 +72,12 @@ data class FrameStats(
     val failure: String? = null,
 )
 
-/** Draws [kind] into one surface at a time; [name] tags its thread. */
-class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
+/**
+ * Draws [kind] into one surface at a time; [name] tags its thread.
+ * [recordUsage]: keep INSIGHT's log (the wallpapers on the home and lock
+ * screens; not the app's preview, nor the system picker's).
+ */
+class RenderLoop(private val context: Context, kind: SceneKind, name: String, recordUsage: Boolean = false) {
     private val thread = HandlerThread("fluid_motion-$name", Process.THREAD_PRIORITY_BACKGROUND).apply { start() }
     private val handler = Handler(thread.looper)
 
@@ -98,6 +102,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
     private var released = false
     private val meter = FrameMeter()
     private var meterReady = false
+    private val usage = if (recordUsage) UsageRecorder(context) else null
     private var cool = true
     private var eased = false
     private var headroom = Float.NaN
@@ -183,9 +188,14 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
             lastFrameNs = 0L
             if (fps == 0) drawStill()
             schedule()
+            noteUsage()
         } else {
             choreographer?.removeFrameCallback(frameCallback)
             scheduled = false
+            // Off screen: the time it was on goes into INSIGHT's log now.
+            val now = System.currentTimeMillis()
+            usage?.offScreen(now)
+            usage?.write(meter, now)
         }
     }
 
@@ -205,6 +215,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         lastFrameNs = 0L
         if (fps == 0) drawStill() else schedule()
         report()
+        noteUsage()
     }
 
     /** Colours, glow and quality (a still wallpaper redraws to show them). */
@@ -239,6 +250,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         lastFrameNs = 0L
         drawStill()
         schedule()
+        noteUsage()
     }
 
     /** Stops for good: frees the GL side and the thread (waits). */
@@ -246,6 +258,9 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         runAndWait {
             released = true
             choreographer?.removeFrameCallback(frameCallback)
+            val now = System.currentTimeMillis()
+            usage?.offScreen(now)
+            usage?.write(meter, now)
             val e = egl
             if (e != null) {
                 eglSurface?.let { e.makeCurrent(it) }
@@ -312,9 +327,17 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         if (!e.swap(es)) Log.w(GL_TAG, "swap failed: surface gone")
         meter.end()
         frames++
-        // About once a second: the stats; every ten seconds or so, the thermal headroom.
+        // About once a second: the stats; every ten seconds or so, the thermal headroom; now and then, INSIGHT's log.
         if (frames % rate.coerceAtLeast(1) == 0L) report()
         if (frameTimeNanos - headroomReadNs >= Headroom.READ_EVERY_NS) readHeadroom(frameTimeNanos)
+        usage?.maybeWrite(meter, System.currentTimeMillis())
+    }
+
+    /** INSIGHT's log: a new span on screen if the wallpaper, its rate or whether it's on screen changed. */
+    private fun noteUsage() {
+        val u = usage ?: return
+        val now = System.currentTimeMillis()
+        if (visible) u.onScreen(kind.id, rate, now) else u.offScreen(now)
     }
 
     /**
@@ -331,6 +354,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         eased = next
         applyRateHint()
         report()
+        noteUsage()
     }
 
     /** Draws the scene as it is (no time passes): a still wallpaper's frame, or a first frame. */

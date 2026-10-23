@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 (build 5)
+INSIGHT: what the wallpapers cost, day by day.
+
+**INSIGHT** (a new section, under POWER):
+- **Today:** how long a fluid_motion wallpaper was on your home or lock screen, drawing or still (battery saver, heat). Also how many frames it drew, what a frame cost the CPU and GPU, and where the time went (which wallpaper, at which rate).
+- **Battery:** the estimated battery used (mAh, % of the battery, and % per hour on screen).
+- **Last 7 days:** bars of the battery each day's use took, today lit.
+- **The estimate:**
+  - It comes from what MEASURE IMPACT measured on your phone: the extra current each wallpaper adds at each rate. Every completed run now updates it.
+  - Before any run, it uses a typical figure: +1.2 mA per frame a second, from your S25 measurements.
+  - It counts the screen refreshing for the wallpaper, which the system's battery screen counts as the screen's, not the app's.
+
+**Keeping the log costs nothing:**
+- It never wakes the phone and adds nothing per frame. Time on screen comes from when the wallpaper is shown, hidden or changes rate. Frames come from running totals read only when the log is written.
+- The log is written when the wallpaper goes off screen, and every 10 minutes while it stays on (between frames drawn anyway).
+- It keeps a week. The app's preview and the system picker's preview aren't counted.
+
+**Also:**
+- MEASURE IMPACT and AUTO CALIBRATE reports now say which version made them and when, so an old report is plain to see.
+- ECO at 24 fps is still waiting for its MEASURE IMPACT run on the S25 Ultra.
+
 ## 0.3.0 (build 4)
 AUTO CALIBRATE, and a QUALITY setting.
 

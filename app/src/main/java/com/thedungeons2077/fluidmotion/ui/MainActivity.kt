@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import com.thedungeons2077.fluidmotion.lib.PowerState
 import com.thedungeons2077.fluidmotion.render.PowerWatch
 import com.thedungeons2077.fluidmotion.render.RenderLoop
+import com.thedungeons2077.fluidmotion.render.UsageStore
 import com.thedungeons2077.fluidmotion.settings.Settings
 
 /** The app's activity. */
@@ -22,6 +23,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var loop: RenderLoop
     private lateinit var state: HomeState
     private val onPower: (PowerState) -> Unit = { state.onPower(it) }
+    // INSIGHT's log, watched while the app is in front (a wallpaper writes to it as it goes off screen).
+    private var usageWatch: AutoCloseable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -38,6 +41,8 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         state.started = true
         state.refreshActive()
+        state.refreshUsage()
+        usageWatch = UsageStore.observe(this) { state.refreshUsage() }
         PowerWatch.add(this, onPower)
         loop.setVisible(true)
     }
@@ -47,6 +52,8 @@ class MainActivity : ComponentActivity() {
         state.cancelRun()
         loop.setVisible(false)
         PowerWatch.remove(onPower)
+        usageWatch?.close()
+        usageWatch = null
         state.started = false
         super.onStop()
     }

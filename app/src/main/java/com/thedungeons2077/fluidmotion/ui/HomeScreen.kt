@@ -21,6 +21,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.contentDescription
+import com.thedungeons2077.fluidmotion.lib.CostModel
+import com.thedungeons2077.fluidmotion.lib.UsageDay
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -239,6 +243,9 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, onCalibrate: () ->
         Toggle("STILL IN BATTERY SAVER", "A still frame while battery saver is on.", state.power.stillInSaver, { state.choosePower(state.power.copy(stillInSaver = it)) })
         Toggle("COOL DOWN WHEN HOT", "SMOOTH eases to 30 as the phone nears its heat limit; half the frames when warm, a still frame when hot.", state.power.coolWhenHot, { state.choosePower(state.power.copy(coolWhenHot = it)) })
 
+        SectionTitle("INSIGHT")
+        Insight(state)
+
         SectionTitle("APP COLOURS")
         Swatches(Palettes.ALL, state.uiPalette.id, state::chooseUiPalette, "app colours")
 
@@ -257,6 +264,122 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, onCalibrate: () ->
             d.textDim,
             Modifier.padding(bottom = DeckSize.sm),
         )
+    }
+}
+
+/**
+ * INSIGHT: the wallpapers' week on this phone: today in words, then seven
+ * days as bars of the battery they used (estimated), with how it was
+ * estimated. Read from the log the wallpapers keep (lib/Usage.kt).
+ */
+@Composable
+private fun Insight(state: HomeState) {
+    val d = LocalDeck.current
+    val days = state.usageDays
+    val today = days.lastOrNull()
+    if (today == null || days.all { it.onScreenMs == 0L }) {
+        DeckText(
+            "Nothing yet: once a fluid_motion wallpaper is on your home or lock screen, its time on screen and what it costs show here, day by day.",
+            DeckType.detail,
+            d.textDim,
+            Modifier.padding(bottom = DeckSize.sm),
+        )
+        return
+    }
+    val capacity = state.capacityMah
+    DeckText(todayText(today, capacity), DeckType.detail, d.text)
+    UsageBars(days, capacity, Modifier.padding(vertical = DeckSize.md))
+    DeckText(
+        (if (state.costFromThisPhone) "Estimated from what MEASURE IMPACT found on this phone (the extra current at each rate)."
+        else "Estimated from a typical figure (+${CostModel.TYPICAL_MA_PER_FPS} mA per frame a second): run MEASURE IMPACT for this phone's own.") +
+            " The system's battery screen counts the screen's own power as the screen's, so it shows less for fluid_motion than this.",
+        DeckType.detail,
+        d.textDim,
+        Modifier.padding(bottom = DeckSize.sm),
+    )
+}
+
+/** Today in a few lines: time on screen, the battery it used, its frames, where the time went. */
+private fun todayText(t: UsageDay, capacity: Float?): String {
+    val lines = mutableListOf("TODAY · ON SCREEN ${duration(t.onScreenMs)} (drawing ${duration(t.drawingMs)}, still ${duration(t.stillMs)})")
+    val share = capacity?.let { " · %.1f%% of the battery".format(Locale.UK, t.mAh / it * 100) } ?: ""
+    val hourly = if (capacity != null && t.drawingMs > 60_000) " · %.1f%% an hour on screen".format(Locale.UK, t.mAh / capacity * 100 / (t.onScreenMs / 3_600_000f)) else ""
+    lines += "≈ %.0f mAh".format(Locale.UK, t.mAh) + share + hourly
+    if (t.frames > 0) {
+        val gpu = if (t.gpuMs.isNaN()) "" else " · GPU %.2f ms".format(Locale.UK, t.gpuMs)
+        lines += "${frameCount(t.frames)} frames · CPU %.2f ms$gpu a frame".format(Locale.UK, t.cpuMs)
+    }
+    lines += t.breakdown.take(3).joinToString(" · ") { (k, ms) -> "${label(k)} ${duration(ms)}" }
+    return lines.joinToString("\n")
+}
+
+/** A log key ("matrix-rain@30") as the dashboard names it: "MATRIX RAIN 30 FPS", "… STILL". */
+private fun label(key: String): String {
+    val kind = SceneKind.find(key.substringBefore('@')).label
+    val fps = key.substringAfter('@').toIntOrNull() ?: 0
+    return if (fps == 0) "$kind STILL" else "$kind $fps FPS"
+}
+
+/** A duration as hours and minutes: "2 H 14 M", "14 M", "< 1 M". */
+private fun duration(ms: Long): String {
+    val minutes = ms / 60_000
+    return when {
+        minutes < 1 -> "< 1 M"
+        minutes < 60 -> "$minutes M"
+        else -> "${minutes / 60} H ${minutes % 60} M"
+    }
+}
+
+/** A count, short: "862", "54 K", "1.2 M". */
+private fun frameCount(n: Long): String = when {
+    n < 10_000 -> "$n"
+    n < 1_000_000 -> "${n / 1000} K"
+    else -> "%.1f M".format(Locale.UK, n / 1e6)
+}
+
+/**
+ * Seven days as bars: each the battery that day's wallpaper use took
+ * (% of the battery, or mAh when the battery's size isn't known), today
+ * lit. Each day reads out its figures to TalkBack.
+ */
+@Composable
+private fun UsageBars(days: List<UsageDay>, capacity: Float?, modifier: Modifier = Modifier) {
+    val d = LocalDeck.current
+    val values = days.map { if (capacity != null) it.mAh / capacity * 100 else it.mAh }
+    val top = values.maxOrNull()?.takeIf { it > 0f } ?: 1f
+    val dayName = remember { DateTimeFormatter.ofPattern("EEE", Locale.UK) }
+    Row(modifier.fillMaxWidth().height(116.dp), horizontalArrangement = Arrangement.spacedBy(DeckSize.xs), verticalAlignment = Alignment.Bottom) {
+        days.forEachIndexed { i, day ->
+            val v = values[i]
+            val lit = i == days.lastIndex
+            val text = when {
+                day.onScreenMs == 0L -> "–"
+                capacity != null -> "%.1f%%".format(Locale.UK, v)
+                else -> "%.0f".format(Locale.UK, v)
+            }
+            val name = day.date.format(dayName).uppercase(Locale.UK)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = "$name: ${duration(day.onScreenMs)} on screen, about ${"%.0f".format(Locale.UK, day.mAh)} milliamp hours"
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                DeckText(text, DeckType.small, if (lit) d.textBright else d.textDim, maxLines = 1)
+                Spacer(Modifier.height(DeckSize.xs))
+                Box(
+                    Modifier
+                        .fillMaxWidth(0.7f)
+                        .height((v / top * 64f).coerceAtLeast(if (day.onScreenMs > 0) 2f else 0f).dp)
+                        .background(if (lit) d.accent else d.accent35),
+                )
+                Spacer(Modifier.height(DeckSize.xs))
+                DeckText(name, DeckType.small, if (lit) d.textBright else d.textDim, glow = if (lit) d.glowText else null, maxLines = 1)
+            }
+        }
     }
 }
 

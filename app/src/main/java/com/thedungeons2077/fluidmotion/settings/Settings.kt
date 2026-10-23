@@ -116,6 +116,15 @@ class Settings(context: Context) {
         get() = prefs.getString("auto.report", "") ?: ""
         set(value) = write { putString("auto.report", value) }
 
+    /**
+     * What MEASURE IMPACT found each wallpaper adds at each rate on this
+     * phone ("matrix-rain@30=34.2;…": lib/Usage.kt CostModel), the latest
+     * per wallpaper and rate: INSIGHT's estimates use it.
+     */
+    var impactModel: String
+        get() = prefs.getString("impact.model", "") ?: ""
+        set(value) = write { putString("impact.model", value) }
+
     /** The last MEASURE IMPACT report (empty until one has run). */
     var impactReport: String
         get() = prefs.getString("impact.report", "") ?: ""

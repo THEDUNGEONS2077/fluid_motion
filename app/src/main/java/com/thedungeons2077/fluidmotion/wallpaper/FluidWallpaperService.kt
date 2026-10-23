@@ -47,7 +47,8 @@ abstract class FluidWallpaperService : WallpaperService() {
             surfaceHolder.setFormat(PixelFormat.RGBX_8888)
             setTouchEventsEnabled(false)
             settings = Settings(this@FluidWallpaperService)
-            loop = RenderLoop(applicationContext, kind, if (isPreview) "${kind.id}-preview" else kind.id)
+            // The picker's preview isn't the wallpaper in use: it keeps no INSIGHT log.
+            loop = RenderLoop(applicationContext, kind, if (isPreview) "${kind.id}-preview" else kind.id, recordUsage = !isPreview)
             applyLook()
             observer = settings.observe {
                 applyLook()

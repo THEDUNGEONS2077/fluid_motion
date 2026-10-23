@@ -47,6 +47,16 @@ class FrameMeter {
     private var timing = false
     private val scratch = IntArray(1)
 
+    /** Since the meter started, never reset (INSIGHT reads what's new from these: render/UsageRecorder.kt). */
+    var totalFrames = 0L
+        private set
+    var totalCpuNs = 0L
+        private set
+    var totalGpuNs = 0L
+        private set
+    var totalGpuFrames = 0L
+        private set
+
     private var frames = 0
     private var cpuNs = 0L
     private var gpuNs = 0L
@@ -82,8 +92,11 @@ class FrameMeter {
     fun endGpu() {
         if (!gpuTimer && sync) {
             GLES30.glFinish()
-            gpuNs += System.nanoTime() - wallStart
+            val ns = System.nanoTime() - wallStart
+            gpuNs += ns
             gpuFrames++
+            totalGpuNs += ns
+            totalGpuFrames++
         }
         if (!timing) return
         GLES30.glEndQuery(TIME_ELAPSED_EXT)
@@ -94,8 +107,11 @@ class FrameMeter {
 
     /** The frame is done (after the swap). */
     fun end() {
-        cpuNs += threadTime() - cpuStart
+        val ns = threadTime() - cpuStart
+        cpuNs += ns
         frames++
+        totalCpuNs += ns
+        totalFrames++
     }
 
     /** Reads every timer result that's ready (never waits). */
@@ -110,8 +126,11 @@ class FrameMeter {
             GLES30.glGetQueryObjectuiv(queries[i], GLES30.GL_QUERY_RESULT, scratch, 0)
             pending[i] = false
             if (disjoint) continue
-            gpuNs += scratch[0].toLong() and 0xffffffffL
+            val ns = scratch[0].toLong() and 0xffffffffL
+            gpuNs += ns
             gpuFrames++
+            totalGpuNs += ns
+            totalGpuFrames++
         }
     }
 
