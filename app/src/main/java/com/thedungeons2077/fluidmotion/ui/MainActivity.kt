@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        // MEASURE IMPACT counts only with the app in front.
+        state.cancelImpact()
         loop.setVisible(false)
         PowerWatch.remove(onPower)
         state.started = false

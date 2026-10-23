@@ -72,22 +72,27 @@ class FrameDumpTest {
         val slots = glyphSlots(KATAKANA.length, BASE_GLYPHS.length)
         var buf = FloatArray(1 shl 16)
         var n = 0
-        val recorder = RainRecorder { x, y, code, alpha ->
-            if (n + 4 > buf.size) buf = buf.copyOf(buf.size * 2)
-            buf[n++] = x; buf[n++] = y; buf[n++] = code; buf[n++] = alpha
-        }
-        recorder.layerH = h
+        val fades = ArrayList<Int>()
+        val recorder = RainRecorder(
+            sink = { x, y, code, alpha ->
+                if (n + 4 > buf.size) buf = buf.copyOf(buf.size * 2)
+                buf[n++] = x; buf[n++] = y; buf[n++] = code; buf[n++] = alpha
+            },
+            fades = { fades.add(it) },
+        )
         recorder.slotOf = slots
         val sim = RainSim(wDp, hDp, slots.size, Rng(20261023))
         sim.prewarm(recorder)
         val prewarm = buf.copyOf(n)
-        // Then two seconds at 30 frames a second, one batch each.
+        // Then two seconds at 30 frames a second: each frame's fades (drawn first, as in a step), then its records.
         val frames = StringBuilder("[")
         repeat(60) { i ->
             n = 0
+            fades.clear()
             sim.step(1f / 30f, recorder)
             if (i > 0) frames.append(',')
-            frames.append(buf.copyOf(n).joinToString(",", "[", "]"))
+            frames.append("{\"fades\":").append(fades.joinToString(",", "[", "]"))
+            frames.append(",\"records\":").append(buf.copyOf(n).joinToString(",", "[", "]")).append('}')
         }
         frames.append(']')
         val pitch = FloatArray(6) { if (it % 2 == 0) RainParams.LAYERS[it / 2].colW * density else RainParams.LAYERS[it / 2].rowH * density }
@@ -101,7 +106,7 @@ class FrameDumpTest {
                     .ints("cellW", at.cellW).ints("cellH", at.cellH).ints("fontPx", at.fontPx).ints("originY", at.originY).done(),
             )
             .str("kana", KATAKANA).str("base", BASE_GLYPHS)
-            .floats("pitch", pitch).num("fadeStripe", RainParams.FADE_STRIPE).num("eraseStroke", 0.5f * density)
+            .floats("pitch", pitch).num("fadeStripe", RainParams.FADE_STRIPE).num("fadePhases", RainParams.FADE_PHASES).num("fadeAlpha", RainParams.FADE_ALPHA).num("eraseStroke", 0.5f * density)
             .raw("colors", colors(palette))
             .num("body", desaturate(palette.text, RainParams.BODY_DESATURATE)).num("dim", desaturate(palette.textDim, RainParams.BODY_DESATURATE))
             .floats("prewarm", prewarm).raw("frames", frames.toString())

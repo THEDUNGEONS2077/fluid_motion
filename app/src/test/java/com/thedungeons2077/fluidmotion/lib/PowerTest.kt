@@ -55,3 +55,26 @@ class PowerTest {
         assertEquals(10 * second, nextFrameAt(second, 10 * second, 30))
     }
 }
+
+/** Easing off by thermal headroom, before the phone gets hot. */
+class HeadroomTest {
+    @Test
+    fun `a fast rate eases near the limit and comes back once well clear`() {
+        assertEquals(false, Headroom.eased(0.5f, cool = true, wasEased = false))
+        assertEquals(true, Headroom.eased(0.85f, cool = true, wasEased = false))
+        // In the gap it stays as it was (no flicker between rates).
+        assertEquals(true, Headroom.eased(0.75f, cool = true, wasEased = true))
+        assertEquals(false, Headroom.eased(0.75f, cool = true, wasEased = false))
+        assertEquals(false, Headroom.eased(0.6f, cool = true, wasEased = true))
+        // No reading: no change. Cooling off: never eased.
+        assertEquals(true, Headroom.eased(Float.NaN, cool = true, wasEased = true))
+        assertEquals(false, Headroom.eased(0.95f, cool = false, wasEased = false))
+    }
+
+    @Test
+    fun `only rates above 30 are eased`() {
+        assertEquals(30, Headroom.rate(60, eased = true))
+        assertEquals(20, Headroom.rate(20, eased = true))
+        assertEquals(60, Headroom.rate(60, eased = false))
+    }
+}

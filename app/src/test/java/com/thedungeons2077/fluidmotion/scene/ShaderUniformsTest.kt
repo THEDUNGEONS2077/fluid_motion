@@ -58,8 +58,8 @@ class ShaderUniformsTest {
             }
         }
         println("programs $programCount, uniforms $uniformCount")
-        // Not vacuous: rain 2 programs, neural 4, velocity 4, and their uniforms all looked at.
-        assertTrue("programs found: $programCount", programCount == 10)
+        // Not vacuous: rain 3 programs, neural 4, velocity 4, and their uniforms all looked at.
+        assertTrue("programs found: $programCount", programCount == 11)
         assertTrue("uniforms checked: $uniformCount", uniformCount > 60)
         assertTrue(problems.joinToString("\n"), problems.isEmpty())
     }

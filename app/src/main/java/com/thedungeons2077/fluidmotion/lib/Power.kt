@@ -79,3 +79,34 @@ fun nextFrameAt(lastFrameNs: Long, nowNs: Long, fps: Int): Long {
     val next = lastFrameNs + interval
     return if (lastFrameNs == 0L || next < nowNs) nowNs else next
 }
+
+/**
+ * Easing off before the phone gets hot, from its thermal headroom
+ * (PowerManager.getThermalHeadroom, Android 11+: 0 is cool, 1.0 is where
+ * the system starts throttling hard). Above EASE_AT a fast rate drops to
+ * EASED_FPS, so the phone never reaches the point where everything
+ * stutters; it comes back below RECOVER_AT (the gap stops it flickering
+ * between the two). The thermal *status* rules in [frameRate] still apply
+ * on top.
+ */
+object Headroom {
+    const val EASE_AT = 0.8f
+    const val RECOVER_AT = 0.7f
+
+    /** The rate an eased wallpaper draws at (a fast rate drops to it; slower ones are left alone). */
+    const val EASED_FPS = 30
+
+    /** How often the loop reads the headroom while drawing (ns): the reading is a call to the system, kept rare. */
+    const val READ_EVERY_NS = 10_000_000_000L
+
+    /** Whether to be eased now, given the reading ([headroom]: NaN if unknown) and whether it was eased. */
+    fun eased(headroom: Float, cool: Boolean, wasEased: Boolean): Boolean = when {
+        !cool -> false
+        headroom.isNaN() -> wasEased
+        wasEased -> headroom >= RECOVER_AT
+        else -> headroom >= EASE_AT
+    }
+
+    /** The rate to draw at: [fps], or EASED_FPS if eased and faster than that. */
+    fun rate(fps: Int, eased: Boolean): Int = if (eased && fps > EASED_FPS) EASED_FPS else fps
+}

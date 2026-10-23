@@ -13,6 +13,10 @@
  * (rain_composite.frag). Per frame: no allocation, two draw calls, a few
  * kilobytes sent to the GPU.
  *
+ * Fades are their own small draw: only the stripe sets' phases are sent,
+ * the stripes are built on the GPU (rain_fade.vert). Fades and glyph
+ * records are flushed in the simulation's order (one waits for the other).
+ *
  * The trail layer is drawn at the screen's own resolution up to
  * MAX_PX_PER_DP (beyond that the glyphs are as sharp as the eye can tell,
  * and every pixel is memory traffic). A new palette applies to glyphs drawn
@@ -47,10 +51,14 @@ private const val MAX_PX_PER_DP = 3f
 /** Instance records per draw (the pre-warm's paint takes several; a frame, one). */
 private const val BATCH = 4096
 
+/** Fades per fade draw (rain_fade.vert's uPhases; a frame has 2 at 30 fps, 6 at most after a stall). */
+private const val MAX_FADES = 8
+
 /** The matrix rain scene. */
 class RainRenderer(private val context: Context) : Scene {
     private val ops = GlProgram(context.assets, "rain_ops.vert", "rain_ops.frag")
     private val composite = GlProgram(context.assets, "fullscreen.vert", "rain_composite.frag")
+    private val fade = GlProgram(context.assets, "rain_fade.vert", "rain_fade.frag")
     private val stream = InstanceStream(stride = 4, capacity = BATCH).apply {
         attribute(0, 2, 0)
         attribute(1, 1, 2)
@@ -74,18 +82,56 @@ class RainRenderer(private val context: Context) : Scene {
     private var layerH = 0
     private var pxPerDp = 1f
 
-    // The ops program's uniforms are set only when something they hold changes (a GL program keeps them).
+    // The programs' uniforms are set only when something they hold changes (a GL program keeps them).
     private var opsDirty = true
     private var compositeDirty = true
+    private var fadeDirty = true
     private val pitch = FloatArray(6)
     private val cell = FloatArray(6)
     private val origin = FloatArray(3)
 
-    /** The simulation's drawing, as instance records in its order (lib/rain/RainRecords.kt); a full batch is drawn first (order kept). */
-    private val recorder = RainRecorder { x, y, code, alpha ->
-        if (stream.full) stream.drawQuads()
-        stream.next().put(x).put(y).put(code).put(alpha)
+    // Fades waiting to be drawn: their stripe sets' phases.
+    private val phases = IntArray(MAX_FADES)
+    private var fadeCount = 0
+
+    /**
+     * The simulation's drawing in its order (lib/rain/RainRecords.kt): a
+     * record waits for the fades before it to be drawn, a fade for the
+     * records before it, and a full batch is drawn first.
+     */
+    private val recorder = RainRecorder(
+        sink = { x, y, code, alpha ->
+            if (fadeCount > 0) drawFades()
+            if (stream.full) stream.drawQuads()
+            stream.next().put(x).put(y).put(code).put(alpha)
+        },
+        fades = { phase ->
+            if (stream.count > 0) stream.drawQuads()
+            if (fadeCount == MAX_FADES) drawFades()
+            phases[fadeCount++] = phase
+        },
+    )
+
+    /** Draws the waiting fades (one instanced draw), then hands the layer back to the ops program. */
+    private fun drawFades() {
+        if (fadeCount == 0) return
+        fade.use()
+        if (fadeDirty) {
+            fadeDirty = false
+            GLES30.glUniform2f(fade.u("uTarget"), layerW.toFloat(), layerH.toFloat())
+            GLES30.glUniform1i(fade.u("uPerSet"), stripesPerSet())
+            GLES30.glUniform1f(fade.u("uStripe"), RainParams.FADE_STRIPE.toFloat())
+            GLES30.glUniform1f(fade.u("uPeriod"), (RainParams.FADE_PHASES * RainParams.FADE_STRIPE).toFloat())
+            GLES30.glUniform1f(fade.u("uFade"), RainParams.FADE_ALPHA)
+        }
+        GLES30.glUniform1iv(fade.u("uPhases"), fadeCount, phases, 0)
+        empty.drawQuads(fadeCount * stripesPerSet())
+        fadeCount = 0
+        ops.use()
     }
+
+    /** Stripes in one fade set: enough to reach the layer's bottom from any phase. */
+    private fun stripesPerSet(): Int = (layerH + RainParams.FADE_PHASES * RainParams.FADE_STRIPE - 1) / (RainParams.FADE_PHASES * RainParams.FADE_STRIPE)
 
     override fun resize(width: Int, height: Int, density: Float) {
         if (width == screenW && height == screenH && density == this.density && sim != null) return
@@ -101,8 +147,8 @@ class RainRenderer(private val context: Context) : Scene {
             atlas = GlyphAtlas.build(typeface, pxPerDp, RainParams.GLOW.getValue(glow))
         }
         makeLayer((width * scale).roundToInt(), (height * scale).roundToInt())
-        recorder.layerH = layerH
         opsDirty = true
+        fadeDirty = true
         // A new rain for the screen, the screen opening full (the pre-warm paints it).
         val a = atlas!!
         recorder.slotOf = a.slotOf
@@ -169,7 +215,6 @@ class RainRenderer(private val context: Context) : Scene {
         GLES30.glUniform4f(ops.u("uPads"), a.padHead.toFloat(), a.padBody.toFloat(), a.padErase.toFloat(), a.padSlot.toFloat())
         GLES30.glUniform2f(ops.u("uAtlas"), a.width.toFloat(), a.height.toFloat())
         GLES30.glUniform1i(ops.u("uPerRow"), a.perRow)
-        GLES30.glUniform1f(ops.u("uStripe"), RainParams.FADE_STRIPE.toFloat())
         val g = RainParams.GLOW.getValue(glow)
         uniformRgb(ops.u("uBright"), colors.textBright)
         uniformRgb(ops.u("uBody"), desaturate(colors.text, RainParams.BODY_DESATURATE))
@@ -185,6 +230,7 @@ class RainRenderer(private val context: Context) : Scene {
         // 1. The trail layer: this frame's fades, erases and glyphs.
         beginLayer()
         s.step(min(dt, RainParams.MAX_FRAME_STEP), recorder)
+        drawFades()
         stream.drawQuads()
         // 2. The screen: the layer over the background and haze, under the floor.
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
@@ -231,6 +277,7 @@ class RainRenderer(private val context: Context) : Scene {
         empty.release()
         ops.release()
         composite.release()
+        fade.release()
     }
 
     private fun releaseLayer() {

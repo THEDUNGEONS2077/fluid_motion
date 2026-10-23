@@ -50,6 +50,11 @@ class Settings(context: Context) {
         get() = Palettes.find(prefs.getString("ui.palette", null))
         set(value) = prefs.edit().putString("ui.palette", value.id).apply()
 
+    /** The last MEASURE IMPACT report (empty until one has run). */
+    var impactReport: String
+        get() = prefs.getString("impact.report", "") ?: ""
+        set(value) = prefs.edit().putString("impact.report", value).apply()
+
     /** The wallpaper the app shows and sets. */
     var selected: SceneKind
         get() = SceneKind.find(prefs.getString("ui.selected", null))

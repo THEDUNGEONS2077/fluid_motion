@@ -31,7 +31,12 @@ You can change the colours, glow and power settings any time, even while the wal
 **POWER:**
 - **ECO / BALANCED / SMOOTH** set the frames a second while the wallpaper is on screen.
 - **STILL IN BATTERY SAVER:** a still frame while battery saver is on.
-- **COOL DOWN WHEN HOT:** half the frames when the phone is warm, a still frame when it's hot.
+- **COOL DOWN WHEN HOT:** SMOOTH eases to 30 as the phone nears its heat limit; half the frames when it's warm, a still frame when it's hot.
+
+**STATUS:**
+- It shows what each frame costs, measured: CPU and GPU time, and late frames.
+- **MEASURE IMPACT** measures the battery cost of each rate on your phone, in about three minutes. Unplug the phone first.
+- **COPY DIAGNOSTICS** copies all of that, to paste into a message.
 
 ## Build
 On Linux with JDK 17 and the Android SDK (`ANDROID_HOME`):

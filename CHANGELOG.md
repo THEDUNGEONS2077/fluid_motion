@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 (build 2)
+Measuring what the wallpapers really cost, and a little less work for the same picture.
+
+**Measure it on your phone:**
+- **MEASURE IMPACT** (STATUS): with the phone unplugged, it shows the wallpaper full screen still, then at ECO, BALANCED and SMOOTH, 45 s each (about three minutes). It reads the battery current every second and reports what each rate adds over the still frame: mA, % of the battery an hour, and the CPU and GPU time of a frame. The last report stays in STATUS.
+- **STATUS** now shows each frame's measured CPU and GPU time (the GPU is timed where the phone's driver allows it) and the share of late frames.
+- **COPY DIAGNOSTICS** copies the phone's GPU, display rates, surface, settings, frame costs and the last MEASURE IMPACT report, to paste into a message.
+
+**Less work, the same picture:**
+- MATRIX RAIN's fades are built on the GPU: about 200 fewer records filled and sent each frame (62 instead of 257). The frames are pixel for pixel the same.
+- **COOL DOWN WHEN HOT** now also looks ahead: as the phone nears its heat limit (its thermal headroom, Android 11+), SMOOTH eases to 30 frames a second, and comes back once it has cooled. Before, the rate only dropped once the phone was already warm.
+
+**Please send back:** a MEASURE IMPACT report for each wallpaper (COPY DIAGNOSTICS includes it). Run them unplugged, with the brightness as you normally have it.
+
 ## 0.1.0 (build 1)
 The first test build: three live wallpapers from cyberdeck_terminal, and the app to set them up.
 

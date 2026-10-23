@@ -3,8 +3,8 @@
 // G head glow, B body glow, A erase shape: scene/rain/GlyphAtlas.kt) the way
 // the web's canvas drew it, premultiplied. Drawn with
 // glBlendFunc(ONE, ONE_MINUS_SRC_ALPHA), so a glyph is "source-over" and
-// a fade or erase (black, with alpha) is "destination-out": one blend for
-// the whole frame, one draw call.
+// an erase (black, with alpha) is "destination-out": one blend for the
+// whole frame (rain_fade.frag's fades too).
 precision mediump float;
 
 uniform sampler2D uGlyphs;
@@ -24,13 +24,8 @@ const int HEAD = 0;
 const int BODY = 1;
 const int HALO = 3;
 const int ERASE = 4;
-const int FADE = 5;
 
 void main() {
-    if (vStyle == FADE) {
-        fragColor = vec4(0.0, 0.0, 0.0, vAlpha);
-        return;
-    }
     vec4 t = texture(uGlyphs, vUv);
     vec4 c;
     if (vStyle == ERASE) {

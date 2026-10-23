@@ -65,7 +65,7 @@ abstract class FluidWallpaperService : WallpaperService() {
         }
 
         /** The frame rate the settings and the phone's state call for. */
-        private fun applyRate() = loop.setRate(frameRate(settings.power, PowerWatch.state))
+        private fun applyRate() = loop.setRate(frameRate(settings.power, PowerWatch.state), settings.power.coolWhenHot)
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)

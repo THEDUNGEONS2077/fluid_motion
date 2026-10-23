@@ -33,15 +33,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.thedungeons2077.fluidmotion.BuildConfig
@@ -62,6 +65,14 @@ import java.util.Locale
 @Composable
 fun HomeScreen(state: HomeState, loop: RenderLoop) {
     val d = state.uiPalette.colors.toDeck()
+    val scope = rememberCoroutineScope()
+    val measuring = state.impact != null
+    // The screen stays on while measuring (a run is about three minutes).
+    val view = LocalView.current
+    DisposableEffect(measuring) {
+        view.keepScreenOn = measuring
+        onDispose { view.keepScreenOn = false }
+    }
     CompositionLocalProvider(LocalDeck provides d, LocalIndication provides remember(d.accent) { WashIndication(d.accent10) }) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             PreviewSurface(loop, Modifier.fillMaxSize())
@@ -70,6 +81,7 @@ fun HomeScreen(state: HomeState, loop: RenderLoop) {
                 Modifier
                     .fillMaxSize()
                     .clickable(
+                        enabled = !measuring,
                         interactionSource = null,
                         indication = null,
                         role = Role.Button,
@@ -83,14 +95,17 @@ fun HomeScreen(state: HomeState, loop: RenderLoop) {
                     .padding(DeckSize.lg),
             ) {
                 Brand(state.started)
+                state.impact?.let { Measuring(it, state::cancelImpact) }
                 Spacer(Modifier.weight(1f))
                 if (state.panelOpen) {
-                    Controls(state, Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.62f).dp))
+                    Controls(state, { state.startImpact(scope) }, Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.62f).dp))
                     Spacer(Modifier.height(DeckSize.sm))
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
-                    DeckButton(if (state.panelOpen) "▾ HIDE" else "▴ CONTROLS", { state.panelOpen = !state.panelOpen })
-                    DeckButton("SET AS WALLPAPER ↗", state::setAsWallpaper, Modifier.weight(1f), primary = true, label = "set ${state.selected.label} as the wallpaper")
+                if (!measuring) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
+                        DeckButton(if (state.panelOpen) "▾ HIDE" else "▴ CONTROLS", { state.panelOpen = !state.panelOpen })
+                        DeckButton("SET AS WALLPAPER ↗", state::setAsWallpaper, Modifier.weight(1f), primary = true, label = "set ${state.selected.label} as the wallpaper")
+                    }
                 }
             }
         }
@@ -132,9 +147,33 @@ private fun rememberNow(ticking: Boolean): Long {
     return now
 }
 
-/** The controls panel: what to show, its colours and glow, power, the app's colours, the status line. */
+/**
+ * MEASURE IMPACT under way: which step, how long left, and how to stop.
+ * It changes once a second in every step alike, so it doesn't skew the
+ * comparison between them.
+ */
 @Composable
-private fun Controls(state: HomeState, modifier: Modifier) {
+private fun Measuring(p: ImpactProgress, onCancel: () -> Unit) {
+    val d = LocalDeck.current
+    val shape = RoundedCornerShape(DeckSize.radius)
+    Column(
+        Modifier
+            .padding(top = DeckSize.md)
+            .fillMaxWidth()
+            .background(d.surfaceRaised, shape)
+            .border(DeckSize.hairline, d.accent35, shape)
+            .padding(DeckSize.md),
+        verticalArrangement = Arrangement.spacedBy(DeckSize.xs),
+    ) {
+        DeckText("MEASURING IMPACT · ${p.label} (${p.step}/${p.steps}) · ${p.secondsLeft} S", DeckType.section, d.textBright, glow = d.glowText)
+        DeckText("Leave the phone alone and the brightness as it is: about three minutes in all.", DeckType.detail, d.textDim)
+        DeckButton("CANCEL", onCancel, Modifier.fillMaxWidth())
+    }
+}
+
+/** The controls panel: what to show, its colours and glow, power, the app's colours, the status and its tools. */
+@Composable
+private fun Controls(state: HomeState, onMeasure: () -> Unit, modifier: Modifier) {
     val d = LocalDeck.current
     val shape = RoundedCornerShape(DeckSize.radius)
     Column(
@@ -170,32 +209,51 @@ private fun Controls(state: HomeState, modifier: Modifier) {
             Modifier.padding(top = DeckSize.sm, bottom = DeckSize.xs),
         )
         Toggle("STILL IN BATTERY SAVER", "A still frame while battery saver is on.", state.power.stillInSaver, { state.choosePower(state.power.copy(stillInSaver = it)) })
-        Toggle("COOL DOWN WHEN HOT", "Half the frames when the phone is warm, a still frame when it's hot.", state.power.coolWhenHot, { state.choosePower(state.power.copy(coolWhenHot = it)) })
+        Toggle("COOL DOWN WHEN HOT", "SMOOTH eases to 30 as the phone nears its heat limit; half the frames when warm, a still frame when hot.", state.power.coolWhenHot, { state.choosePower(state.power.copy(coolWhenHot = it)) })
 
         SectionTitle("APP COLOURS")
         Swatches(Palettes.ALL, state.uiPalette.id, state::chooseUiPalette, "app colours")
 
         SectionTitle("STATUS")
         DeckText(status(state), DeckType.detail, d.text)
-        DeckText("fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", DeckType.detail, d.textDim, Modifier.padding(bottom = DeckSize.sm))
+        DeckText("fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", DeckType.detail, d.textDim)
+        // Stacked, full width: side by side, their names don't fit a phone.
+        Column(Modifier.fillMaxWidth().padding(vertical = DeckSize.sm), verticalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
+            DeckButton("MEASURE IMPACT", onMeasure, Modifier.fillMaxWidth(), label = "measure the battery cost of each rate, about three minutes")
+            DeckButton("COPY DIAGNOSTICS", state::copyDiagnostics, Modifier.fillMaxWidth(), label = "copy this phone's numbers to paste")
+        }
+        state.impactNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(bottom = DeckSize.sm)) }
+        DeckText(
+            state.impactReport.ifEmpty { "MEASURE IMPACT shows what each rate costs the battery on this phone: unplug it first." },
+            DeckType.detail,
+            d.textDim,
+            Modifier.padding(bottom = DeckSize.sm),
+        )
     }
 }
 
-/** What the preview is doing and why, in a line. */
+/** What the preview is doing and why, and what its frames cost (measured), in a line or two. */
 private fun status(state: HomeState): String {
     val s = state.stats
     val p = state.powerState
-    val fps = state.fps
+    val fps = s?.fps ?: state.fps
+    if (s?.failure != null) return "CAN'T DRAW HERE: ${s.failure}"
     val why = when {
         fps == 0 && p.powerSave && state.power.stillInSaver -> "STILL · BATTERY SAVER"
         fps == 0 -> "STILL · PHONE HOT"
+        s?.eased == true -> "$fps FPS · EASED, PHONE WARMING"
         p.thermal >= Thermal.MODERATE && state.power.coolWhenHot -> "$fps FPS · HALF RATE, PHONE WARM"
         else -> "$fps FPS"
     }
-    if (s?.failure != null) return "CAN'T DRAW HERE: ${s.failure}"
-    val cost = if (s != null && s.fps > 0 && s.frameMs > 0f) " · %.1f MS A FRAME".format(Locale.UK, s.frameMs) else ""
-    val gpu = if (s?.lowPriority == true) " · GPU LOW PRIORITY" else ""
-    return why + cost + gpu
+    val c = s?.cost
+    val cost = if (c != null && fps > 0 && c.fps > 0f) {
+        val gpu = if (c.gpuMs.isNaN()) "" else " · GPU %.2f MS".format(Locale.UK, c.gpuMs)
+        "\nA FRAME: CPU %.2f MS$gpu · %.0f%% LATE".format(Locale.UK, c.cpuMs, c.late * 100)
+    } else {
+        ""
+    }
+    val low = if (s?.lowPriority == true) " · GPU LOW PRIORITY" else ""
+    return why + low + cost
 }
 
 /** A wallpaper's picture. */

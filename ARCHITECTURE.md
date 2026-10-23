@@ -19,8 +19,9 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
 1. **Pacing.** `RenderLoop` sleeps until a frame is due, then `Choreographer.postFrameCallbackDelayed` lands it on a vsync. That is one wake-up per frame, not one per vsync.
 2. **Drawing.** `Scene.render(dt)` advances the simulation by `dt`, capped at 0.1 s so the motion never jumps after a stall, and draws.
    - **MATRIX RAIN.**
-     - **Records.** The simulation (`RainSim`, a port of the web engine) tells a `RainRecorder` what changed: stripe fades, glyphs erased by shape, glyphs put.
-     - **One draw.** The records go into the persistent *trail layer* (an RGBA8 texture), in order, as one instanced draw with one blend: premultiplied over, where a fade or erase is black with alpha, which is the web's destination-out.
+     - **Records.** The simulation (`RainSim`, a port of the web engine) tells a `RainRecorder` what changed: glyphs erased by shape, glyphs put, and stripe fades.
+     - **Fades.** A fade is only its stripe set's phase. `rain_fade.vert` builds the stripes from `gl_InstanceID`.
+     - **Drawing.** Records and fades go into the persistent *trail layer* (an RGBA8 texture), in the simulation's order, with one blend: premultiplied over, where a fade or erase is black with alpha, which is the web's destination-out.
      - **Composite.** A full-screen pass puts the trail layer over the haze and under the floor.
      - **Atlas.** The glyphs come from an atlas drawn once by Android Canvas: R is the core, G the head glow, B the body glow, A the erase shape. Colours are applied in the shader, so a palette change needs no new atlas.
    - **NEURAL NET.** One pass and five draw calls: the background, bokeh, links (a glow pass, then the thin pass), then nodes and signals.
@@ -29,7 +30,14 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
    - **VELOCITY.** One pass.
      - **Light.** Panels (each its own slanted quad), lines, streaks and the flare are added up on a clear target.
      - **Background.** The background then goes in *under* the light by destination alpha (`ONE_MINUS_DST_ALPHA, ONE`), exactly the web's additive canvas over its CSS background.
-3. **Swap.** `eglSwapBuffers`. About once a second the loop reports its frame cost (the app's STATUS line).
+3. **Swap.** `eglSwapBuffers`.
+4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
+   - CPU as thread time;
+   - GPU through `EXT_disjoint_timer_query`, a ring of 4 queries read a few frames late;
+   - late frames.
+   About once a second the loop reports it (STATUS, MEASURE IMPACT, COPY DIAGNOSTICS).
+
+**MEASURE IMPACT** (`lib/Impact.kt`, run by `ui/HomeState.kt`) shows the wallpaper still, then at each profile's rate. It samples `BatteryManager` CURRENT_NOW once a second, unplugged, after a 10 s settle. Each rate's extra current over STILL is the wallpaper's own cost: the screen and everything else are the same in every step.
 
 Simulations keep their own phases, advanced by `dt` and wrapped, so no clock time ever goes into a sine. A wallpaper that runs for months stays as smooth as on day one.
 
@@ -40,6 +48,7 @@ The objective is no hit to battery or performance. How it's met:
   - **No judder.** Each rate divides 60 and 120.
   - **Refresh-rate hint.** The rate is passed to `Surface.setFrameRate` (Android 11+), so the S25 Ultra's LTPO panel can lower its refresh too.
 - **Battery saver gives a still frame** (default on). **Heat:** a moderate thermal status halves the rate, and severe or worse gives a still frame (default on). PowerWatch listens only while something is drawing.
+- **Easing ahead of heat** (Android 11+). The loop reads the thermal headroom every 10 s, between frames it draws anyway, so the reading never wakes the phone. Near the limit, SMOOTH eases to 30 fps, with hysteresis (`lib/Power.kt` Headroom).
 - **Low priority.** The GL context asks for LOW GPU priority (`EGL_IMG_context_priority`; Adreno honours it). The render thread runs at background priority, which puts it on the efficiency cores behind the app in front.
 - **Little per-frame work.** No allocation, a handful of draw calls, kilobytes of uploads, no depth or stencil buffers. A `glClear` before full-screen passes spares tiled GPUs a reload of the last frame.
 - **Rain trail layer.** It is drawn at the screen's resolution, capped at 3 px per dp.

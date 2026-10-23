@@ -192,6 +192,9 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
 
     const ops = program('rain_ops.vert', 'rain_ops.frag');
     const comp = program('fullscreen.vert', 'rain_composite.frag');
+    const fade = program('rain_fade.vert', 'rain_fade.frag');
+    const period = d.fadePhases * d.fadeStripe;
+    const perSet = Math.ceil(H / period);
     // The instance stream (gl/Gl.kt InstanceStream): column/row, code, alpha.
     const buf = gl.createBuffer();
     const vao = gl.createVertexArray();
@@ -213,7 +216,6 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform4f(ops.u('uPads'), A.padHead, A.padBody, A.padErase, A.padSlot);
     gl.uniform2f(ops.u('uAtlas'), A.width, A.height);
     gl.uniform1i(ops.u('uPerRow'), A.perRow);
-    gl.uniform1f(ops.u('uStripe'), d.fadeStripe);
     set3(ops.u('uBright'), d.colors.textBright);
     set3(ops.u('uBody'), d.body);
     set3(ops.u('uDim'), d.dim);
@@ -221,17 +223,29 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform1f(ops.u('uGlowAlpha'), d.glow.alpha);
     gl.uniform1f(ops.u('uHeadLayers'), d.glow.headLayers);
     gl.uniform1i(ops.u('uGlyphs'), 0);
+    // drawFades' uniforms.
+    fade.use();
+    gl.uniform2f(fade.u('uTarget'), W, H);
+    gl.uniform1i(fade.u('uPerSet'), perSet);
+    gl.uniform1f(fade.u('uStripe'), d.fadeStripe);
+    gl.uniform1f(fade.u('uPeriod'), period);
+    gl.uniform1f(fade.u('uFade'), d.fadeAlpha);
     comp.use();
     set3(comp.u('uBg'), d.colors.bg);
     set3(comp.u('uAccent'), d.colors.accent);
     gl.uniform1i(comp.u('uRain'), 0);
 
-    /** beginLayer + the records drawn in order (the phone draws them in batches of 4096: the same picture). */
-    const draw = (records) => {
+    /** beginLayer, the frame's fades (drawFades), then its records in order (the phone draws them in batches of 4096: the same picture). */
+    const draw = (records, fades = []) => {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.viewport(0, 0, W, H);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      if (fades.length) {
+        fade.use();
+        gl.uniform1iv(fade.u('uPhases'), new Int32Array(fades));
+        quads(fades.length * perSet);
+      }
       ops.use();
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, atlas);
@@ -258,8 +272,8 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     snapshot('rain-open', `${d.prewarm.length / 4} records painted the opening screen;`);
     let records = 0;
     for (const f of d.frames) {
-      draw(f);
-      records += f.length / 4;
+      draw(f.records, f.fades);
+      records += f.records.length / 4;
     }
     compose();
     snapshot('rain', `then ${d.frames.length} frames, ${Math.round(records / d.frames.length)} records each;`);

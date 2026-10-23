@@ -17,10 +17,15 @@
  *     the display (Surface.setFrameRate, Android 11+), so an adaptive
  *     panel like the S25 Ultra's can run slower too; rate 0 draws one still
  *     frame and stops (battery saver, hot);
+ *   - near the phone's thermal limit (its headroom, read every ten seconds
+ *     between frames drawn anyway) a fast rate eases to 30 before anything
+ *     gets hot enough to stutter (lib/Power.kt Headroom);
  *   - its thread runs at background priority (the system puts it on the
  *     efficiency cores and gives the app in front the CPU first), its GL
  *     context at low GPU priority (gl/EglCore.kt);
- *   - every frame's work is the scene's, which allocates nothing.
+ *   - every frame's work is the scene's, which allocates nothing; what it
+ *     costs is measured (FrameMeter: CPU and GPU time, late frames) and
+ *     reported once a second.
  * All GL work happens on this loop's thread; the public methods post to it
  * (the ones that must finish before the caller goes on wait for it).
  */
@@ -32,6 +37,7 @@ import android.opengl.GLES30
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.PowerManager
 import android.os.Process
 import android.util.Log
 import android.view.Choreographer
@@ -39,6 +45,7 @@ import android.view.Surface
 import com.thedungeons2077.fluidmotion.gl.EglCore
 import com.thedungeons2077.fluidmotion.gl.GL_TAG
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
+import com.thedungeons2077.fluidmotion.lib.Headroom
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
 import com.thedungeons2077.fluidmotion.scene.Scene
@@ -46,16 +53,20 @@ import com.thedungeons2077.fluidmotion.scene.SceneKind
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** What a loop reports about its drawing (for the app's diagnostics line). */
+/** What a loop reports about its drawing (the app's STATUS line, MEASURE IMPACT, COPY DIAGNOSTICS). */
 data class FrameStats(
-    /** The rate it's drawing at (0: a still frame). */
+    /** The rate it's asked to draw at (0: a still frame), after any easing for heat. */
     val fps: Int,
-    /** The average CPU time of a frame, simulation and GL calls (ms). */
-    val frameMs: Float,
+    /** What the last second's frames cost (FrameMeter): rate achieved, CPU and GPU ms, late share. */
+    val cost: FrameCost,
     /** Frames drawn since it started. */
     val frames: Long,
     /** The GPU took the low priority request. */
     val lowPriority: Boolean,
+    /** Eased off from a fast rate because the phone is near its thermal limit (lib/Power.kt Headroom). */
+    val eased: Boolean,
+    /** The phone's thermal headroom at the last reading (NaN: unknown). */
+    val headroom: Float,
     /** Why the scene couldn't be drawn, if it couldn't (it shows black instead). */
     val failure: String? = null,
 )
@@ -81,10 +92,24 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
     private var scheduled = false
     private var lastFrameNs = 0L
     private var frames = 0L
-    private var cpuNs = 0L
-    private var timed = 0
     private var failure: String? = null
     private var released = false
+    private val meter = FrameMeter()
+    private var meterReady = false
+    private var cool = true
+    private var eased = false
+    private var headroom = Float.NaN
+    private var headroomReadNs = 0L
+    private val power = context.getSystemService(PowerManager::class.java)
+
+    /** About the GPU and surface (COPY DIAGNOSTICS), set once a context exists. */
+    val info: String get() = "$gpuInfo\n$surfaceInfo"
+
+    @Volatile
+    private var gpuInfo = "no GL context yet"
+
+    @Volatile
+    private var surfaceInfo = "no surface yet"
 
     /** Called (on the loop's thread) about once a second while drawing, and on every change of rate. */
     @Volatile
@@ -104,6 +129,12 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
             val e = egl ?: EglCore().also { egl = it }
             eglSurface = e.createWindowSurface(surface)
             e.makeCurrent(eglSurface!!)
+            if (!meterReady) {
+                meter.setUp()
+                meterReady = true
+                gpuInfo = "GPU ${GLES30.glGetString(GLES30.GL_RENDERER)} · ${GLES30.glGetString(GLES30.GL_VERSION)} · " +
+                    "GPU timer ${if (meter.gpuTimer) "yes" else "no"} · low priority ${if (e.lowPriority) "yes" else "no"}"
+            }
         } catch (e: IllegalStateException) {
             // No GL here at all (it can't draw): say why rather than crash the wallpaper over and over.
             Log.e(GL_TAG, "no GL surface", e)
@@ -121,6 +152,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
     fun surfaceChanged(width: Int, height: Int) = post {
         this.width = width
         this.height = height
+        surfaceInfo = "surface $width × $height px at ${context.resources.displayMetrics.density} px/dp"
         val s = scene ?: return@post
         eglSurface ?: return@post
         s.resize(width, height, context.resources.displayMetrics.density)
@@ -155,10 +187,16 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         }
     }
 
-    /** The frame rate (0: one still frame, then nothing until something changes). */
-    fun setRate(fps: Int) = post {
-        if (this.fps == fps) return@post
+    /**
+     * The frame rate (0: one still frame, then nothing until something
+     * changes), and whether to ease off near the thermal limit ([cool]: the
+     * COOL DOWN WHEN HOT setting).
+     */
+    fun setRate(fps: Int, cool: Boolean = true) = post {
+        if (!cool) eased = false
+        if (this.fps == fps && this.cool == cool) return@post
         this.fps = fps
+        this.cool = cool
         applyRateHint()
         choreographer?.removeFrameCallback(frameCallback)
         scheduled = false
@@ -203,7 +241,10 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
             if (e != null) {
                 eglSurface?.let { e.makeCurrent(it) }
                 // GL objects can only be freed with the context current; without a surface they go with the context.
-                if (eglSurface != null) scene?.release()
+                if (eglSurface != null) {
+                    scene?.release()
+                    meter.release()
+                }
                 eglSurface?.let { e.releaseSurface(it) }
                 e.release()
             }
@@ -232,13 +273,16 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         null
     }
 
+    /** The rate it draws at now: the one asked for, eased if the phone is near its thermal limit. */
+    private val rate: Int get() = Headroom.rate(fps, eased)
+
     /** Asks for the next frame, timed to land on the vsync nearest its due time. */
     private fun schedule() {
         val c = choreographer ?: return
-        if (scheduled || !visible || eglSurface == null || scene == null || fps <= 0 || width == 0) return
+        if (scheduled || !visible || eglSurface == null || scene == null || rate <= 0 || width == 0) return
         scheduled = true
         val now = System.nanoTime()
-        val due = if (lastFrameNs == 0L) now else lastFrameNs + 1_000_000_000L / fps - VSYNC_SLACK_NS
+        val due = if (lastFrameNs == 0L) now else lastFrameNs + 1_000_000_000L / rate - VSYNC_SLACK_NS
         c.postFrameCallbackDelayed(frameCallback, ((due - now) / 1_000_000L).coerceAtLeast(0L))
     }
 
@@ -247,16 +291,36 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         val s = scene ?: return
         val es = eglSurface ?: return
         val e = egl ?: return
+        val interval = 1_000_000_000L / rate.coerceAtLeast(1)
+        // Late: more than half an interval after it was due (a frame the eye may catch as a stutter).
+        val late = lastFrameNs != 0L && frameTimeNanos - lastFrameNs > interval + interval / 2
         val dt = if (lastFrameNs == 0L) 0f else (frameTimeNanos - lastFrameNs) / 1e9f
         lastFrameNs = frameTimeNanos
-        val start = System.nanoTime()
+        meter.begin(late)
         s.render(dt)
+        meter.endGpu()
         if (!e.swap(es)) Log.w(GL_TAG, "swap failed: surface gone")
-        cpuNs += System.nanoTime() - start
-        timed++
+        meter.end()
         frames++
-        // About once a second: the stats.
-        if (frames % fps.coerceAtLeast(1) == 0L) report()
+        // About once a second: the stats; every ten seconds or so, the thermal headroom.
+        if (frames % rate.coerceAtLeast(1) == 0L) report()
+        if (frameTimeNanos - headroomReadNs >= Headroom.READ_EVERY_NS) readHeadroom(frameTimeNanos)
+    }
+
+    /**
+     * Reads the thermal headroom (Android 11+) and eases off a fast rate if
+     * the phone is getting near its limit. Read here, between frames that
+     * are drawn anyway, so it never wakes the phone by itself.
+     */
+    private fun readHeadroom(now: Long) {
+        headroomReadNs = now
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        headroom = power?.getThermalHeadroom(HEADROOM_FORECAST_S) ?: Float.NaN
+        val next = Headroom.eased(headroom, cool, eased)
+        if (next == eased) return
+        eased = next
+        applyRateHint()
+        report()
     }
 
     /** Draws the scene as it is (no time passes): a still wallpaper's frame, or a first frame. */
@@ -280,20 +344,17 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
         val sf = surface ?: return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !sf.isValid) return
         try {
-            sf.setFrameRate(fps.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
+            sf.setFrameRate(rate.toFloat(), Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
         } catch (e: IllegalArgumentException) {
-            Log.w(GL_TAG, "setFrameRate($fps) refused", e)
+            Log.w(GL_TAG, "setFrameRate($rate) refused", e)
         } catch (e: IllegalStateException) {
-            Log.w(GL_TAG, "setFrameRate($fps) on a released surface", e)
+            Log.w(GL_TAG, "setFrameRate($rate) on a released surface", e)
         }
     }
 
-    /** Sends the stats, then starts the frame-time average over. */
+    /** Sends the stats, then starts the measurements over. */
     private fun report() {
-        val average = if (timed > 0) cpuNs / 1e6f / timed else 0f
-        onStats?.invoke(FrameStats(fps, average, frames, egl?.lowPriority == true, failure))
-        cpuNs = 0L
-        timed = 0
+        onStats?.invoke(FrameStats(rate, meter.take(), frames, egl?.lowPriority == true, eased, headroom, failure))
     }
 
     /** Runs [block] on the loop's thread, later (the caller goes on). */
@@ -324,5 +385,8 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String) {
 
         /** The longest a caller waits on the loop's thread. */
         const val WAIT_SECONDS = 2L
+
+        /** How far ahead the thermal headroom is forecast (s): far enough to ease off in time. */
+        const val HEADROOM_FORECAST_S = 10
     }
 }
