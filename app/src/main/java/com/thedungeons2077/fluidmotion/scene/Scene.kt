@@ -14,6 +14,7 @@ import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.scene.flow.FlowRenderer
+import com.thedungeons2077.fluidmotion.scene.megacity.MegacityRenderer
 import com.thedungeons2077.fluidmotion.scene.neural.NeuralRenderer
 import com.thedungeons2077.fluidmotion.scene.rain.RainRenderer
 import com.thedungeons2077.fluidmotion.scene.velocity.VelocityRenderer
@@ -56,14 +57,16 @@ interface Scene {
  * dashboard shows them, the palette each starts in (its reference's; DATA
  * FLOW, with no reference, in ICE: cyan and violet), whether QUALITY's
  * [Quality.linkGlow] changes what it draws (NEURAL NET's link glow, DATA
- * FLOW's soft glows and halos: AUTO CALIBRATE then measures LOW apart), and
+ * FLOW's soft glows and halos, MEGACITY's window halo: AUTO CALIBRATE then
+ * measures LOW apart), and
  * how to make its scene.
  */
 enum class SceneKind(val id: String, val label: String, val defaultPalette: String, val usesLinkGlow: Boolean) {
     RAIN("matrix-rain", "MATRIX RAIN", "phosphor", false),
     NEURAL("neural-net", "NEURAL NET", "blood", true),
     VELOCITY("velocity", "VELOCITY", "blood", false),
-    DATA_FLOW("data-flow", "DATA FLOW", "ice", true);
+    DATA_FLOW("data-flow", "DATA FLOW", "ice", true),
+    MEGACITY("megacity", "MEGACITY", "neon", true);
 
     /** A new scene of this kind. */
     fun create(context: Context): Scene = when (this) {
@@ -71,6 +74,7 @@ enum class SceneKind(val id: String, val label: String, val defaultPalette: Stri
         NEURAL -> NeuralRenderer(context)
         VELOCITY -> VelocityRenderer(context)
         DATA_FLOW -> FlowRenderer(context)
+        MEGACITY -> MegacityRenderer(context)
     }
 
     companion object {

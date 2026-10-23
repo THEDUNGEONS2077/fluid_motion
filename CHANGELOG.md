@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.0 (build 7)
+A fifth wallpaper: MEGACITY.
+
+**MEGACITY** (from your reference):
+- **What it shows.** A city of towers in blue haze at night, seen from a rooftop where a lone figure stands on the ledge, looking out over it. Five layers of towers, the far ones lost in the haze; tens of thousands of windows, lit floor by floor; pink neon signs with glyphs; the haze turning violet lower down, a glow rising from below. Her outline is our own drawing of the pose.
+- **What moves.** A few windows go on or off every second, each at its own moment; signs breathe, and now and then one stutters like a failing tube; beacons blink on the roofs; drones cross with short tails; patches of haze drift.
+- **The same city as the dashboard's.** Laid out by the same rules from the same random numbers, and drawn by the very same shaders.
+- **Colours.** It starts in NEON, the reference's; every palette makes its own city.
+
+**On a phone:**
+- **Light on the battery.** The whole city is worked out once per pixel in one pass, windows included, from a small texture sent once; per frame only the signs, drones and beacons change (a few kilobytes). Nothing is allocated per frame.
+- **QUALITY LOW** also leaves out the windows' soft halo. **ZOOM** grows the towers and windows; the figure keeps her place.
+
+**Also:**
+- WALLPAPER's tiles: with five, the row scrolls sideways (each name whole, ● ON HOME too), opening at the wallpaper you're on.
+
+
 ## 0.5.0 (build 6)
 A fourth wallpaper, DATA FLOW, and ZOOM for every wallpaper.
 

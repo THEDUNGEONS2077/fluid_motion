@@ -1,7 +1,7 @@
 # Design
 
 ## Origin
-The wallpapers are cyberdeck_terminal's (`~/projects/cyberdeck_terminal/src/wallpaper/`). MATRIX RAIN, NEURAL NET and VELOCITY were each matched there to a reference image; DATA FLOW was designed there, at full fidelity, then brought here. Its DESIGN.md has the measurements. Here they're redrawn on the GPU to look the same: same parameters, same colours, same compositing. The app's own screen is the dashboard's design system (theme.css and app.css) in Compose.
+The wallpapers are cyberdeck_terminal's (`~/projects/cyberdeck_terminal/src/wallpaper/`). MATRIX RAIN, NEURAL NET and VELOCITY were each matched there to a reference image; DATA FLOW was designed there, at full fidelity, then brought here; MEGACITY was matched there to the user's reference and brought here with the same shaders. Its DESIGN.md has the measurements. Here they're redrawn on the GPU to look the same: same parameters, same colours, same compositing. The app's own screen is the dashboard's design system (theme.css and app.css) in Compose.
 
 ## The wallpapers on a phone
 The web versions were tuned on a landscape monitor. On a portrait phone, a few things are measured differently, so that each still looks like its reference.
@@ -18,9 +18,13 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 | DATA FLOW packets | 2.2 a second per million px² | 3.2 a second per screen | At the web's density a portrait phone gets one packet every second or so |
 | DATA FLOW drawing | The board drawn once into a layer; the light added over it, each tail in six fading slices | The board drawn again each frame from instances, the dot grid worked out per pixel; each tail fades smoothly in the shader (the slices' fade, squared) | No full-screen layer to keep and read back every frame |
 
+| MEGACITY | Drawn per pixel in WebGL 2 | The same shaders, in OpenGL ES 3: the same city, pixel for pixel, from the same layout | One pass per pixel was already the cheapest way to draw tens of thousands of windows |
+
+**MEGACITY on a phone.** The reference is a phone wallpaper, so the phone has its composition: the figure 60% of the screen's height, left of the middle, on her ledge. The near layers of towers are sparse enough that the violet haze shows low down, as in the reference. ZOOM grows the towers and windows; she keeps her place. It starts in NEON.
+
 **DATA FLOW on a phone.** The board's rules are the web's, so on a phone the chips are as big as they are in a browser of that size: the main chip spans about half the width, and its buses alone cover the share of the screen the board aims for (16% of its points). The loose traces that fill a monitor's board between the buses (about half of its traces, many ending in pads) are rare on a phone.
 
-**Glow levels** are the web's (LOW, MEDIUM, HIGH, MAX), each wallpaper reading them its own way. **Palettes** are the web's six. Each wallpaper starts in its reference's palette: the rain in PHOSPHOR, NEURAL NET and VELOCITY in BLOOD. DATA FLOW, with no reference, starts in ICE (cyan traces, violet ones and a violet glow).
+**Glow levels** are the web's (LOW, MEDIUM, HIGH, MAX), each wallpaper reading them its own way. **Palettes** are the web's six. Each wallpaper starts in its reference's palette: the rain in PHOSPHOR, NEURAL NET and VELOCITY in BLOOD. DATA FLOW, with no reference, starts in ICE (cyan traces, violet ones and a violet glow); MEGACITY in NEON (its reference's blue haze and pink signs).
 
 **Zoom is the web's** (user request, 2026-10-23: zoom in, and set any wallpaper's default zoom). Its steps are Chrome's, from 50% to 200%, and each wallpaper keeps its own.
 - **What a zoom does.** A wallpaper at zoom z is laid out for a screen 1/z as big and drawn z times as large: larger glyphs, nodes, traces and chips, and fewer of them.
@@ -35,7 +39,7 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 ## The app
 - **The screen.** The selected wallpaper runs full screen. The brand panel `<fluid_motion>` sits top left with the time on the left and the date on the right (as the dashboard's). The controls sit in a panel at the bottom, within thumb reach, with **SET AS WALLPAPER ↗** last and largest. A tap on the wallpaper hides the controls to see it whole.
 - **Sections.**
-  - WALLPAPER: picture tiles, one marked ● ON HOME when it's the home screen's. The names may wrap to a second line, so four tiles fit a phone's width with every name whole.
+  - WALLPAPER: picture tiles, one marked ● ON HOME when it's the home screen's. The names may wrap to a second line. Up to four tiles share the width; with five the row scrolls sideways, each tile wide enough for its name and ● ON HOME, opening at the chosen one.
   - COLOURS: that wallpaper's palette, as swatches in each palette's own colours.
   - GLOW.
   - ZOOM: that wallpaper's zoom, − value + RESET (each button named for TalkBack, the value read out as it changes); or pinch the preview.

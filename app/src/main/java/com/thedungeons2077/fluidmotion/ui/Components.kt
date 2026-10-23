@@ -17,6 +17,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -236,19 +240,30 @@ private fun Swatch(p: Palette, on: Boolean, onClick: () -> Unit, what: String, m
 /**
  * The wallpapers as picture tiles in a row: the lit one is the one shown
  * and set; [active] marks the one on the home screen. Names may wrap to a
- * second line (four to a phone's width leaves "MATRIX RAIN" no room on
- * one), and every name keeps room for two, so the tiles line up.
+ * second line, and every name keeps room for two, so the tiles line up.
+ * Up to four share the width; more and the row scrolls sideways, each tile
+ * wide enough for its name and "● ON HOME" (a tile cut off at the edge says
+ * there's more), opening scrolled to the chosen one.
  */
 @Composable
 fun <T> Tiles(items: List<T>, selected: T, active: T?, label: (T) -> String, picture: (T) -> Int, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val d = LocalDeck.current
     val shape = RoundedCornerShape(DeckSize.radius)
-    Row(modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
+    val scrolls = items.size > TILES_THAT_FIT
+    val scroll = rememberScrollState()
+    if (scrolls) {
+        // Open with the chosen tile in sight (once: the row then scrolls as the hand moves it).
+        val step = with(LocalDensity.current) { (TILE_WIDTH + DeckSize.sm).toPx() }
+        LaunchedEffect(Unit) { scroll.scrollTo((items.indexOf(selected) * step - step / 2).toInt().coerceAtLeast(0)) }
+    }
+    Row(
+        modifier.fillMaxWidth().then(if (scrolls) Modifier.horizontalScroll(scroll) else Modifier).selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(DeckSize.sm),
+    ) {
         items.forEach { item ->
             val on = item == selected
             Column(
-                Modifier
-                    .weight(1f)
+                (if (scrolls) Modifier.width(TILE_WIDTH) else Modifier.weight(1f))
                     .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(item) }),
                 verticalArrangement = Arrangement.spacedBy(DeckSize.xs),
             ) {
@@ -267,6 +282,12 @@ fun <T> Tiles(items: List<T>, selected: T, active: T?, label: (T) -> String, pic
         }
     }
 }
+
+/** Picture tiles that share a phone's width; past this many the row scrolls. */
+private const val TILES_THAT_FIT = 4
+
+/** A tile's width when the row scrolls: room for "● ON HOME" and a name like "MEGACITY" (12 sp mono, about 8 dp a letter). */
+private val TILE_WIDTH = 84.dp
 
 /** A setting that's on or off: a switch to accessibility services, the whole row its target. */
 @Composable

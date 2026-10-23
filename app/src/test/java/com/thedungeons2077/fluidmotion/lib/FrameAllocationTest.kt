@@ -12,6 +12,9 @@ import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
 import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
 import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
 import com.thedungeons2077.fluidmotion.lib.flow.flowTones
+import com.thedungeons2077.fluidmotion.lib.megacity.CityFrame
+import com.thedungeons2077.fluidmotion.lib.megacity.CityLayout
+import com.thedungeons2077.fluidmotion.lib.megacity.CitySim
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralFrame
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralParams
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralSim
@@ -52,6 +55,21 @@ class FrameAllocationTest {
         println("$name: $allocated bytes in 1000 frames (windows ${windows.joinToString()})")
         // Not a byte a frame: one object a frame would be 16 000 bytes, one per packet over 1500.
         assertTrue("$name allocated $allocated bytes in 1000 frames", allocated < 256)
+    }
+
+    @Test
+    fun megacity() {
+        val city = CityLayout.build(w.toDouble(), h.toDouble(), Rng(6))
+        val sim = CitySim(city, Rng(7))
+        val tones = CityLayout.tones(Palettes.NEON.colors)
+        val signs = FloatArray(CityFrame.signRoom(city))
+        val glows = FloatArray(CityFrame.glowRoom(city))
+        val scratch = FloatArray(3)
+        weigh("megacity") {
+            sim.advance(1f / 30f)
+            CityFrame.signs(sim, tones, GlowLevel.HIGH, signs, scratch)
+            CityFrame.glows(sim, tones, GlowLevel.HIGH, glows, scratch)
+        }
     }
 
     private companion object {

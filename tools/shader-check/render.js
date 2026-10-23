@@ -1,5 +1,5 @@
 /**
- * tools/shader-check/render.js: runs in the page. Draws the four scenes
+ * tools/shader-check/render.js: runs in the page. Draws the five scenes
  * the way their Kotlin renderers do (app/.../scene/<scene>/…Renderer.kt),
  * call for call, with the real shaders and the frames the JVM dump wrote.
  * Keep the two in step: a renderer change belongs here too.
@@ -580,6 +580,88 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     );
   }
 
+  // --- MEGACITY (scene/megacity/MegacityRenderer.kt) -------------------------------------
+  function megacity(d, low = false, name = low ? 'megacity-low' : 'megacity') {
+    const target = scaledTarget(low ? d.lowScale : 1);
+    const px = d.density * (low ? d.lowScale : 1);
+    const t = d.tones;
+    const city = program('mc_full.vert', 'mc_city.frag');
+    const sign = program('mc_sign.vert', 'mc_sign.frag');
+    const glow = program('mc_glow.vert', 'mc_glow.frag');
+    const shape = program('mc_shape.vert', 'mc_shape.frag');
+    // sendSkyline: RGBA float, read with texelFetch.
+    const skyline = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, skyline);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 2048, d.rows * d.layers, 0, gl.RGBA, gl.FLOAT, new Float32Array(d.skyline));
+    /** A buffer and vertex array: attributes `sizes` floats each, one per instance or per vertex. */
+    const vertices = (data, sizes, perInstance) => {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.length ? data : [0]), gl.STATIC_DRAW);
+      const stride = sizes.reduce((a, b) => a + b, 0);
+      let offset = 0;
+      sizes.forEach((size, loc) => {
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride * 4, offset * 4);
+        if (perInstance) gl.vertexAttribDivisor(loc, 1);
+        offset += size;
+      });
+      gl.bindVertexArray(null);
+      return { vao, count: data.length / stride };
+    };
+    const signs = vertices(d.signs, [4, 4, 4], true);
+    const glows = vertices(d.glows, [4, 4, 4], true);
+    const fg = vertices(d.foreground, [2, 4], false);
+    // setUniforms.
+    city.use();
+    gl.uniform1i(city.u('uSkyline'), 0);
+    gl.uniform1i(city.u('uLayers'), d.layers);
+    gl.uniform1i(city.u('uRows'), d.rows);
+    gl.uniform1i(city.u('uCols'), d.cols);
+    gl.uniform2f(city.u('uTarget'), target.width, target.height);
+    gl.uniform1f(city.u('uDensity'), px);
+    gl.uniform1f(city.u('uHeight'), d.height);
+    gl.uniform2fv(city.u('uCell'), new Float32Array(d.cells));
+    gl.uniform1fv(city.u('uFog'), new Float32Array(d.fogs));
+    for (const k of ['skyTop', 'skyMid', 'skyLow', 'lowGlow', 'faceFar', 'faceNear', 'edge', 'winPale', 'winViolet', 'winPink', 'winWhite']) {
+      gl.uniform3fv(city.u('u' + k[0].toUpperCase() + k.slice(1)), new Float32Array(t[k]));
+    }
+    gl.uniform1f(city.u('uWindowGlow'), low ? 0 : d.windowGlow);
+    for (const p of [sign, glow, shape]) {
+      p.use();
+      gl.uniform2f(p.u('uTarget'), target.width, target.height);
+      gl.uniform1f(p.u('uDensity'), px);
+    }
+    // render.
+    target.begin();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    city.use();
+    gl.uniform1f(city.u('uTime'), d.time);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, skyline);
+    fullScreen();
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    for (const [p, v] of [[sign, signs], [glow, glows]]) {
+      if (!v.count) continue;
+      p.use();
+      gl.bindVertexArray(v.vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, v.count);
+    }
+    shape.use();
+    gl.bindVertexArray(fg.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, fg.count);
+    gl.bindVertexArray(null);
+    gl.disable(gl.BLEND);
+    target.end();
+    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}, no window halo; ` : ''}${d.cols} columns × ${d.layers} layers, ${signs.count} signs, ${glows.count} glows, ${fg.count} foreground vertices;`);
+  }
+
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
   const runs = [
     ['rain', () => rain(dumps.rain, 'rain')],
@@ -596,6 +678,9 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     ['velocity-zoom', () => velocity(dumps['velocity-zoom'], false, 'velocity-zoom')],
     ['flow-zoom', () => flow(dumps['flow-zoom'], false, 'flow-zoom')],
     ['flow-zoom-out', () => flow(dumps['flow-zoom-out'], false, 'flow-zoom-out')],
+    ['megacity', () => megacity(dumps.megacity)],
+    ['megacity-low', () => megacity(dumps.megacity, true)],
+    ['megacity-zoom', () => megacity(dumps['megacity-zoom'], false, 'megacity-zoom')],
   ];
   for (const [name, fn] of runs) {
     try {

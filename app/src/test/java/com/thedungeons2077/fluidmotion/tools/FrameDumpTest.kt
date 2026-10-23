@@ -3,7 +3,7 @@
  * (an S25 Ultra at its default FHD+: 1080 × 2340 px, 2.8125 px per dp), to
  * app/build/shader-check/ (a JSON file per scene), for tools/shader-check to draw with the
  * real shader files in WebGL2. The numbers come from the same lib code the
- * renderers use (RainRecorder, NeuralFrame, VelocityFrame, FlowFrame), so the pictures
+ * renderers use (RainRecorder, NeuralFrame, VelocityFrame, FlowFrame, CityLayout and CityFrame), so the pictures
  * show what the phone will draw.
  *
  * Not a check by itself (it asserts only that it wrote something): the
@@ -23,6 +23,10 @@ import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
 import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
 import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
 import com.thedungeons2077.fluidmotion.lib.flow.flowTones
+import com.thedungeons2077.fluidmotion.lib.megacity.CityFrame
+import com.thedungeons2077.fluidmotion.lib.megacity.CityLayout
+import com.thedungeons2077.fluidmotion.lib.megacity.CitySim
+import com.thedungeons2077.fluidmotion.lib.megacity.MegacityParams
 import com.thedungeons2077.fluidmotion.lib.mixRgb
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralFrame
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralParams
@@ -272,4 +276,47 @@ class FrameDumpTest {
         File(out, name).writeText(json)
         assertTrue(sim.pulses > 0 && sim.chipGlow.max() >= 0.3f)
     }
+
+    @Test
+    fun `megacity as the phone draws it`() {
+        dumpMegacity(1f, "megacity.json")
+        // Zoomed in (150%): larger towers and windows; the figure keeps her place.
+        dumpMegacity(1.5f, "megacity-zoom.json")
+    }
+
+    /** MEGACITY at [zoom], to [name]: its skyline texture, foreground and a frame's lights, eight seconds in. */
+    private fun dumpMegacity(zoom: Float, name: String) {
+        val palette = Palettes.NEON.colors
+        val tones = CityLayout.tones(palette)
+        val px = density * zoom
+        val rng = Rng(20261024)
+        val city = CityLayout.build((wDp / zoom).toDouble(), (hDp / zoom).toDouble(), rng)
+        val sim = CitySim(city, rng)
+        repeat(8 * 30) { sim.advance(1f / 30f) }
+        val signs = FloatArray(CityFrame.signRoom(city))
+        val glows = FloatArray(CityFrame.glowRoom(city))
+        val scratch = FloatArray(3)
+        val ns = CityFrame.signs(sim, tones, GlowLevel.HIGH, signs, scratch)
+        val ng = CityFrame.glows(sim, tones, GlowLevel.HIGH, glows, scratch)
+        fun rgb(c: FloatArray) = c
+        val p = MegacityParams
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("density", px).num("lowScale", Quality.LOW.scale(density))
+            .num("cols", city.cols).num("rows", city.rows).num("layers", city.layers.size).num("height", city.h.toFloat()).num("time", sim.time)
+            .floats("cells", FloatArray(p.LAYERS.size * 2) { if (it % 2 == 0) p.LAYERS[it / 2].cellW else p.LAYERS[it / 2].cellH })
+            .floats("fogs", FloatArray(p.LAYERS.size) { p.LAYERS[it].fog })
+            .raw(
+                "tones",
+                Json().floats("skyTop", rgb(tones.skyTop)).floats("skyMid", tones.skyMid).floats("skyLow", tones.skyLow).floats("lowGlow", tones.lowGlow)
+                    .floats("faceFar", tones.faceFar).floats("faceNear", tones.faceNear).floats("edge", tones.edge)
+                    .floats("winPale", tones.winPale).floats("winViolet", tones.winViolet).floats("winPink", tones.winPink).floats("winWhite", tones.winWhite).done(),
+            )
+            .num("windowGlow", p.GLOW.getValue(GlowLevel.HIGH).window)
+            .floats("skyline", CityLayout.skyline(city)).floats("foreground", CityLayout.foreground(city, tones, px))
+            .floats("signs", signs, ns * CityFrame.SIGN).floats("glows", glows, ng * CityFrame.GLOW)
+            .done()
+        File(out, name).writeText(json)
+        assertTrue(city.signs.isNotEmpty() && ng > 0)
+    }
 }
+

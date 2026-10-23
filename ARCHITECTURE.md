@@ -3,12 +3,12 @@
 ## Layers
 ```
 app/src/main/java/com/thedungeons2077/fluidmotion/
-  lib/        pure Kotlin: palettes, power rules, the four simulations, per-frame packing   (unit tested)
+  lib/        pure Kotlin: palettes, power rules, the five simulations, per-frame packing   (unit tested)
   gl/         EGL context (low GPU priority), shader programs, instance buffers
-  scene/      the four renderers (one Scene each) and the rain's glyph atlas
+  scene/      the five renderers (one Scene each) and the rain's glyph atlas
   render/     RenderLoop (thread, EGL surface, frame pacing), PowerWatch (battery saver, heat)
   settings/   SharedPreferences ("fluid_motion")
-  wallpaper/  FluidWallpaperService + one subclass per wallpaper (four picker entries)
+  wallpaper/  FluidWallpaperService + one subclass per wallpaper (five picker entries)
   ui/         MainActivity, the Compose screen in cyberdeck_terminal's style
 app/src/main/assets/shaders/   GLSL ES 3.00 (shared with tools/shader-check)
 tools/shader-check/            the shaders run in WebGL2 with dumped frames
@@ -35,6 +35,9 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
      - **Background.** The CSS glows and the dot grid are worked out per pixel (`flow_bg.frag`): no texture.
      - **Drawn over it.** The traces (and pin stubs), the vias and pads, and the chips. These are instances sent once per board, palette, glow and quality (`gl/Gl.kt` StaticInstances), redrawn each frame. There is no board layer to keep and read back.
      - **Added.** The light: chips taking data in, afterglow, packets, heads, flashes (`FlowFrame.light`, a few KB a frame). A packet is one instance per stretch of trace it covers, its tail's fade worked out in the fragment shader.
+   - **MEGACITY.** One pass and four draw calls, with the web's own shaders (`mc_*`).
+     - **The city.** `CityLayout` lays it out once per screen (a port of city.ts, rule for rule): per layer of towers, a skyline packed into a small RGBA32F texture. `mc_city.frag` works out every pixel once: the nearest tower it's inside, then its face, edges and windows from the tower's seed, the windows going on and off by the clock. Nothing about the city is sent per frame.
+     - **On top.** Signs, then haze patches, beacons and drones (`CityFrame`, a few KB a frame), then the railing, the ledge and the figure: triangles sent once per city, palette, quality and zoom, each outline with a one-pixel fading edge (no multisampling).
 3. **Swap.** `eglSwapBuffers`.
 4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
    - CPU as thread time;
@@ -71,8 +74,8 @@ The objective is no hit to battery or performance. How it's met:
 - **The app.** HomeScreen's ZOOM stepper, and a pinch on the preview (`pinchToZoom`, a step at a time through `HomeState.previewZoom`, kept on lift). AUTO CALIBRATE measures each wallpaper at its own zoom.
 
 ## QUALITY and AUTO
-- **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass, and DATA FLOW's soft glow round its traces and halos round its packets (`FlowParams.glow`).
-  - Below the screen's resolution, NEURAL NET, VELOCITY and DATA FLOW draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
+- **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass, DATA FLOW's soft glow round its traces and halos round its packets (`FlowParams.glow`), and MEGACITY's window halo.
+  - Below the screen's resolution, NEURAL NET, VELOCITY, DATA FLOW and MEGACITY draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
   - At full resolution nothing extra is drawn.
 - **Applying a change.** A quality or glow change is applied at the scene's next frame, with the context current: the rain rebuilds and pre-warms again.
 - **AUTO CALIBRATE** (`ui/HomeState.kt`, rules in `Calibration`):
@@ -99,11 +102,12 @@ The objective is no hit to battery or performance. How it's met:
   - the rain erases only what it drew, opens full and fades evenly;
   - links, colours and motion bounds;
   - VELOCITY's geometry on 16:9 and on a phone;
+  - MEGACITY: the city the same for a seed, signs and beacons only where in sight, the skyline packed as the shader reads it, the figure's mesh, the motion's pools; **CityGoldenTest:** the city is the web's (ten cities compared by checksum);
   - DATA FLOW's board: runs at 45°, no trace crossing or touching another, chip traces from their pins, the screen covered; its pools and arrays never overrun;
   - **FlowBoardGoldenTest:** given the same random numbers, the board is the web's, chip for chip and trace for trace. 80 boards were compared in full against board.ts under Node when the port was made; a few are kept as checksums;
   - **FrameAllocationTest:** a frame of each wallpaper allocates nothing;
   - **ZoomTest:** the steps, and what a zoom does to the neural net's counts and VELOCITY's sizes.
-- **Zoomed frames.** FrameDumpTest also dumps each scene at 150% (and DATA FLOW at 50%), which shader-check draws as `*-zoom.png`.
+- **Zoomed frames.** FrameDumpTest also dumps each scene at 150% (and DATA FLOW at 50%; MEGACITY also drawn at LOW), which shader-check draws as `*-zoom.png`.
 - **ShaderUniformsTest.** Every uniform a renderer sets is declared by its shaders, and every declared uniform is set.
 - **FrameDumpTest.** It writes what each scene sends the GPU on an S25 Ultra (1080 × 2340 at 2.8125 px per dp) to `app/build/shader-check/`.
 - **tools/shader-check.**

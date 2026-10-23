@@ -137,3 +137,8 @@ class VelocityService : FluidWallpaperService() {
 class DataFlowService : FluidWallpaperService() {
     override val kind = SceneKind.DATA_FLOW
 }
+
+/** MEGACITY. */
+class MegacityService : FluidWallpaperService() {
+    override val kind = SceneKind.MEGACITY
+}
