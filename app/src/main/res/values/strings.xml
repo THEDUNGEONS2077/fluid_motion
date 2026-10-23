@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- strings.xml: fluid_motion's words (labels as the dashboard shows them: uppercase). -->
+<resources>
+    <string name="app_name">fluid_motion</string>
+    <string name="author">THEDUNGEONS2077</string>
+    <string name="rain_label">MATRIX RAIN</string>
+    <string name="rain_description">Columns of glyphs falling in three depths, glowing heads, long fading trails.</string>
+    <string name="neural_label">NEURAL NET</string>
+    <string name="neural_description">A drifting plexus of glowing nodes; signals run along its links.</string>
+    <string name="velocity_label">VELOCITY</string>
+    <string name="velocity_description">Light caught in motion: slanted panels drifting, streaks racing past.</string>
+</resources>

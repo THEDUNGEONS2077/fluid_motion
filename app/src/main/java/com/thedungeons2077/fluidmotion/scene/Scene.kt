@@ -1,0 +1,58 @@
+/*
+ * scene/Scene.kt: what a wallpaper is to the render loop, and the catalog of
+ * the three.
+ *
+ * Layer: scene (GL). A Scene draws one wallpaper into whatever surface is
+ * current: the home screen's (wallpaper/FluidWallpaperService.kt) or the
+ * app's preview (ui/PreviewSurface.kt), driven by render/RenderLoop.kt.
+ * Every method runs on the loop's GL thread with the context current.
+ */
+package com.thedungeons2077.fluidmotion.scene
+
+import android.content.Context
+import com.thedungeons2077.fluidmotion.lib.GlowLevel
+import com.thedungeons2077.fluidmotion.lib.PaletteColors
+import com.thedungeons2077.fluidmotion.scene.neural.NeuralRenderer
+import com.thedungeons2077.fluidmotion.scene.rain.RainRenderer
+import com.thedungeons2077.fluidmotion.scene.velocity.VelocityRenderer
+
+/** One wallpaper's drawing. */
+interface Scene {
+    /** Sets up for a target of [width] × [height] px at [density] px per dp (the first call builds the scene). */
+    fun resize(width: Int, height: Int, density: Float)
+
+    /** Moves the scene on by [dt] seconds (0: just draw it as it is) and draws it. */
+    fun render(dt: Float)
+
+    /** New colours (they apply from the next frame; the rain's rain in, as on the web). */
+    fun setPalette(colors: PaletteColors)
+
+    /** A new glow level. */
+    fun setGlow(glow: GlowLevel)
+
+    /** Frees its GL objects. */
+    fun release()
+}
+
+/**
+ * The wallpapers: ids (stored in settings: never rename one), names as the
+ * dashboard shows them, the palette each starts in (its reference's), and
+ * how to make its scene.
+ */
+enum class SceneKind(val id: String, val label: String, val defaultPalette: String) {
+    RAIN("matrix-rain", "MATRIX RAIN", "phosphor"),
+    NEURAL("neural-net", "NEURAL NET", "blood"),
+    VELOCITY("velocity", "VELOCITY", "blood");
+
+    /** A new scene of this kind. */
+    fun create(context: Context): Scene = when (this) {
+        RAIN -> RainRenderer(context)
+        NEURAL -> NeuralRenderer(context)
+        VELOCITY -> VelocityRenderer(context)
+    }
+
+    companion object {
+        /** The kind with [id], or the rain. */
+        fun find(id: String?): SceneKind = entries.firstOrNull { it.id == id } ?: RAIN
+    }
+}

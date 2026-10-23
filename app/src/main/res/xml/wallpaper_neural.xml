@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- wallpaper_neural.xml: how the system's wallpaper picker lists this wallpaper (thumbnail, words, the app as its settings). -->
+<wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
+    android:author="@string/author"
+    android:description="@string/neural_description"
+    android:settingsActivity="com.thedungeons2077.fluidmotion.ui.MainActivity"
+    android:thumbnail="@drawable/thumb_neural" />

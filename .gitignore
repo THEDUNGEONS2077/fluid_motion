@@ -1,0 +1,16 @@
+# Build output and local machine files.
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.kotlin/
+# Signing: the release key and its passwords never go in git (back them up yourself).
+keys/
+keystore.properties
+# The shader check's dependencies and output.
+tools/shader-check/node_modules/
+tools/shader-check/out/
+# Release APKs packaged by scripts/release-android.sh.
+dist/

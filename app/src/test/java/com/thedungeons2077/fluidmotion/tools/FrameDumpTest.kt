@@ -1,0 +1,172 @@
+/*
+ * FrameDumpTest: writes what each scene hands the GPU, as the phone would
+ * (an S25 Ultra at its default FHD+: 1080 × 2340 px, 2.8125 px per dp), to
+ * app/build/shader-check/ (a JSON file per scene), for tools/shader-check to draw with the
+ * real shader files in WebGL2. The numbers come from the same lib code the
+ * renderers use (RainRecorder, NeuralFrame, VelocityFrame), so the pictures
+ * show what the phone will draw.
+ *
+ * Not a check by itself (it asserts only that it wrote something): the
+ * harness looks at the result.
+ */
+package com.thedungeons2077.fluidmotion.tools
+
+import com.thedungeons2077.fluidmotion.lib.GlowLevel
+import com.thedungeons2077.fluidmotion.lib.PaletteColors
+import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.desaturate
+import com.thedungeons2077.fluidmotion.lib.mixRgb
+import com.thedungeons2077.fluidmotion.lib.neural.NeuralFrame
+import com.thedungeons2077.fluidmotion.lib.neural.NeuralParams
+import com.thedungeons2077.fluidmotion.lib.neural.NeuralSim
+import com.thedungeons2077.fluidmotion.lib.rain.AtlasLayout
+import com.thedungeons2077.fluidmotion.lib.rain.BASE_GLYPHS
+import com.thedungeons2077.fluidmotion.lib.rain.KATAKANA
+import com.thedungeons2077.fluidmotion.lib.rain.RainParams
+import com.thedungeons2077.fluidmotion.lib.rain.RainRecorder
+import com.thedungeons2077.fluidmotion.lib.rain.RainSim
+import com.thedungeons2077.fluidmotion.lib.rain.Rng
+import com.thedungeons2077.fluidmotion.lib.rain.glyphSlots
+import com.thedungeons2077.fluidmotion.lib.velocity.VelocityFrame
+import com.thedungeons2077.fluidmotion.lib.velocity.VelocityParams
+import com.thedungeons2077.fluidmotion.lib.velocity.VelocitySim
+import com.thedungeons2077.fluidmotion.lib.velocity.velocityTones
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+
+class FrameDumpTest {
+    private val out = File("build/shader-check").apply { mkdirs() }
+    private val w = 1080
+    private val h = 2340
+    private val density = 2.8125f
+    private val wDp = w / density
+    private val hDp = h / density
+
+    /** A tiny JSON writer (org.json is a stub in unit tests). */
+    private class Json {
+        val sb = StringBuilder("{")
+        private var first = true
+        private fun key(k: String) {
+            if (!first) sb.append(',')
+            first = false
+            sb.append('"').append(k).append("\":")
+        }
+        fun num(k: String, v: Number) = apply { key(k); sb.append(v) }
+        fun str(k: String, v: String) = apply { key(k); sb.append('"').append(v.replace("\\", "\\\\").replace("\"", "\\\"")).append('"') }
+        fun floats(k: String, v: FloatArray, n: Int = v.size) = apply { key(k); sb.append('['); for (i in 0 until n) { if (i > 0) sb.append(','); sb.append(v[i]) }; sb.append(']') }
+        fun ints(k: String, v: IntArray) = apply { key(k); sb.append(v.joinToString(",", "[", "]")) }
+        fun raw(k: String, json: String) = apply { key(k); sb.append(json) }
+        fun done() = sb.append('}').toString()
+    }
+
+    private fun colors(c: PaletteColors) = Json()
+        .num("bg", c.bg).num("text", c.text).num("textDim", c.textDim).num("textBright", c.textBright)
+        .num("accent", c.accent).num("cool", c.cool).done()
+
+    @Test
+    fun `rain as the phone draws it`() {
+        val palette = Palettes.PHOSPHOR.colors
+        val glow = RainParams.GLOW.getValue(GlowLevel.HIGH)
+        val at = AtlasLayout(density, glow, KATAKANA.length + BASE_GLYPHS.length)
+        val slots = glyphSlots(KATAKANA.length, BASE_GLYPHS.length)
+        var buf = FloatArray(1 shl 16)
+        var n = 0
+        val recorder = RainRecorder { x, y, code, alpha ->
+            if (n + 4 > buf.size) buf = buf.copyOf(buf.size * 2)
+            buf[n++] = x; buf[n++] = y; buf[n++] = code; buf[n++] = alpha
+        }
+        recorder.layerH = h
+        recorder.slotOf = slots
+        val sim = RainSim(wDp, hDp, slots.size, Rng(20261023))
+        sim.prewarm(recorder)
+        val prewarm = buf.copyOf(n)
+        // Then two seconds at 30 frames a second, one batch each.
+        val frames = StringBuilder("[")
+        repeat(60) { i ->
+            n = 0
+            sim.step(1f / 30f, recorder)
+            if (i > 0) frames.append(',')
+            frames.append(buf.copyOf(n).joinToString(",", "[", "]"))
+        }
+        frames.append(']')
+        val pitch = FloatArray(6) { if (it % 2 == 0) RainParams.LAYERS[it / 2].colW * density else RainParams.LAYERS[it / 2].rowH * density }
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("pxPerDp", density)
+            .raw("glow", Json().num("alpha", glow.alpha).num("head", glow.head).num("headLayers", glow.headLayers).num("body", glow.body).done())
+            .raw(
+                "atlas",
+                Json().num("width", at.width).num("height", at.height).num("perRow", AtlasLayout.PER_ROW)
+                    .num("padHead", at.padHead).num("padBody", at.padBody).num("padErase", at.padErase).num("padSlot", at.padSlot)
+                    .ints("cellW", at.cellW).ints("cellH", at.cellH).ints("fontPx", at.fontPx).ints("originY", at.originY).done(),
+            )
+            .str("kana", KATAKANA).str("base", BASE_GLYPHS)
+            .floats("pitch", pitch).num("fadeStripe", RainParams.FADE_STRIPE).num("eraseStroke", 0.5f * density)
+            .raw("colors", colors(palette))
+            .num("body", desaturate(palette.text, RainParams.BODY_DESATURATE)).num("dim", desaturate(palette.textDim, RainParams.BODY_DESATURATE))
+            .floats("prewarm", prewarm).raw("frames", frames.toString())
+            .done()
+        File(out, "rain.json").writeText(json)
+        assertTrue(prewarm.size > 1000)
+    }
+
+    @Test
+    fun `neural net as the phone draws it`() {
+        val palette = Palettes.BLOOD.colors
+        val glow = NeuralParams.GLOW.getValue(GlowLevel.HIGH)
+        val sim = NeuralSim(wDp, hDp, Rng(20261023))
+        // Twelve seconds in: signals running, nodes lit.
+        repeat(12 * 30) { sim.advance(1f / 30f) }
+        val nodes = FloatArray(NeuralFrame.MAX_NODES * 2)
+        val sparks = FloatArray(NeuralFrame.MAX_SPARKS * 4)
+        val bokeh = FloatArray(NeuralFrame.MAX_BOKEH * 4)
+        val pairs = NeuralFrame.nodes(sim, nodes)
+        val ns = NeuralFrame.sparks(sim, glow.haloSize, density, sparks)
+        val nb = NeuralFrame.bokeh(sim, bokeh)
+        val links = FloatArray(sim.links.size / 2 * 3) { i -> if (i % 3 == 2) sim.weight[i / 3] else sim.links[2 * (i / 3) + i % 3].toFloat() }
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(sim.w, sim.h))
+            .raw("colors", colors(palette)).num("coolLifted", mixRgb(palette.cool, 0xffffff, 0.4f))
+            .raw("glow", Json().num("halo", glow.halo).num("haloSize", glow.haloSize).num("lineGlow", glow.lineGlow).done())
+            .num("lineWidth", NeuralParams.LINE_WIDTH).num("glowWidth", NeuralFrame.GLOW_WIDTH).num("maxLink", sim.maxLink)
+            .num("edge", 1f / NeuralFrame.spriteScale(glow.haloSize, density))
+            .floats("links", links).floats("nodes", nodes, pairs * 4).floats("bokeh", bokeh, nb * 4).floats("sparks", sparks, ns * 4)
+            .done()
+        File(out, "neural.json").writeText(json)
+        assertTrue(ns > 0)
+    }
+
+    @Test
+    fun `velocity as the phone draws it`() {
+        val palette = Palettes.BLOOD.colors
+        val g = VelocityParams.GLOW.getValue(GlowLevel.HIGH)
+        val rng = Rng(20261023)
+        val sim = VelocitySim(wDp, hDp, rng)
+        val tile = VelocityFrame.striationTile(rng)
+        // Eight seconds in: streaks in flight.
+        repeat(8 * 30) { sim.advance(1f / 30f) }
+        val panels = FloatArray(16)
+        val lines = FloatArray(VelocityParams.LONG_LINES * 4)
+        val streaks = FloatArray(VelocityParams.MAX_STREAKS * 4)
+        val looks = FloatArray(VelocityParams.MAX_STREAKS * 4)
+        val box = FloatArray(4)
+        val np = VelocityFrame.panels(sim, g, panels)
+        val nl = VelocityFrame.lines(sim, g, lines)
+        val ns = VelocityFrame.streaks(sim, streaks, looks)
+        VelocityFrame.arcBox(sim, density, box)
+        val tones = velocityTones(palette)
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(sim.w, sim.h))
+            .raw("colors", colors(palette))
+            .raw("tones", Json().num("pale", tones.pale).num("red", tones.red).num("flare", tones.flare).done())
+            .num("g", g).num("soft", VelocityParams.SOFT_EDGE).num("striation", VelocityParams.STRIATION)
+            .ints("tile", IntArray(tile.size) { tile[it].toInt() and 255 })
+            .floats("panels", panels, np * 4).floats("lines", lines, nl * 4).floats("streaks", streaks, ns * 4).floats("looks", looks, ns * 4)
+            .floats("bloom", floatArrayOf(sim.flareX, sim.flareY, sim.flareR)).floats("arc", floatArrayOf(sim.arcX, sim.arcY, sim.arcR))
+            .floats("span", floatArrayOf(VelocityParams.ARC_FROM, VelocityParams.ARC_TO)).num("arcHalf", VelocityParams.ARC_WIDTH / 2f)
+            .num("arcAlpha", VelocityParams.ARC_ALPHA).num("strength", VelocityFrame.flareStrength(sim, g)).floats("arcBox", box)
+            .done()
+        File(out, "velocity.json").writeText(json)
+        assertTrue(np == 4)
+    }
+}

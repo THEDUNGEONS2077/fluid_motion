@@ -1,0 +1,12 @@
+{
+  "name": "fluid-motion-shader-check",
+  "private": true,
+  "description": "Compiles and runs fluid_motion's GLSL ES 3.00 shaders in WebGL2 (headless Chromium), drawing the frames the JVM frame dump wrote.",
+  "type": "module",
+  "scripts": {
+    "check": "node run.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}
