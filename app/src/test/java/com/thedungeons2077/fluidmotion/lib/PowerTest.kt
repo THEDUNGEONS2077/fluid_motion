@@ -18,6 +18,21 @@ class PowerTest {
     }
 
     @Test
+    fun `ECO takes the display's own slow rate, so the panel can slow down too`() {
+        // The S25 Ultra at Standard motion smoothness (measured: 20 fps kept the panel at 60 Hz).
+        val s25 = listOf(10f, 24f, 30f, 48f, 60f)
+        assertEquals(24, profileFps(PowerProfile.ECO, s25))
+        assertEquals(24, frameRate(PowerChoice(PowerProfile.ECO), PowerState(refreshRates = s25)))
+        assertEquals(12, frameRate(PowerChoice(PowerProfile.ECO), PowerState(thermal = Thermal.MODERATE, refreshRates = s25)))
+        // No slow mode (60/120 Hz only), or unknown: 20, which fits both evenly.
+        assertEquals(20, profileFps(PowerProfile.ECO, listOf(60f, 120f)))
+        assertEquals(20, profileFps(PowerProfile.ECO, emptyList()))
+        // The other profiles fit every common display as they are.
+        assertEquals(30, profileFps(PowerProfile.BALANCED, s25))
+        assertEquals(60, profileFps(PowerProfile.SMOOTH, s25))
+    }
+
+    @Test
     fun `battery saver freezes it, unless the user said not to`() {
         assertEquals(0, frameRate(PowerChoice(), PowerState(powerSave = true)))
         assertEquals(30, frameRate(PowerChoice(stillInSaver = false), PowerState(powerSave = true)))

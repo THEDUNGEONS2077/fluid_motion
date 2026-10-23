@@ -1,6 +1,8 @@
 /*
  * render/PowerWatch.kt: the phone's power state as the frame rate cares
- * about it (lib/Power.kt PowerState): battery saver, and how hot it is.
+ * about it (lib/Power.kt PowerState): battery saver, how hot it is, and
+ * which refresh rates the display can run at (they change with the
+ * phone's motion smoothness setting).
  *
  * Layer: render (Android: PowerManager). One watcher for the whole process
  * (the home screen's wallpaper, the lock screen's, the picker's preview and
@@ -13,8 +15,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.display.DisplayManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
+import android.view.Display
 import com.thedungeons2077.fluidmotion.lib.PowerState
 
 /** Tells listeners about battery saver and thermal status changes. */
@@ -33,6 +39,17 @@ object PowerWatch {
 
     // Made only on Android 10+ (the type doesn't exist before: making it in a field would fail on 8 and 9).
     private var thermalListener: PowerManager.OnThermalStatusChangedListener? = null
+
+    private var displays: DisplayManager? = null
+
+    // The display's modes can change (motion smoothness, a resolution change): read them again.
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == Display.DEFAULT_DISPLAY) update()
+        }
+    }
 
     /** Starts telling [listener] (main thread), with the state now. Call on the main thread. */
     fun add(context: Context, listener: (PowerState) -> Unit) {
@@ -63,12 +80,17 @@ object PowerWatch {
             thermalListener = l
             pm.addThermalStatusListener(context.mainExecutor, l)
         }
+        val dm = context.getSystemService(DisplayManager::class.java)
+        displays = dm
+        dm.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
         state = read()
     }
 
     private fun stop() {
         val context = app ?: return
         context.unregisterReceiver(saverReceiver)
+        displays?.unregisterDisplayListener(displayListener)
+        displays = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) thermalListener?.let { power?.removeThermalStatusListener(it) }
         thermalListener = null
         app = null
@@ -86,6 +108,7 @@ object PowerWatch {
     private fun read(): PowerState {
         val pm = power ?: return PowerState()
         val thermal = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) pm.currentThermalStatus else 0
-        return PowerState(powerSave = pm.isPowerSaveMode, thermal = thermal)
+        val modes = displays?.getDisplay(Display.DEFAULT_DISPLAY)?.supportedModes?.map { it.refreshRate }?.distinct()?.sorted() ?: emptyList()
+        return PowerState(powerSave = pm.isPowerSaveMode, thermal = thermal, refreshRates = modes)
     }
 }

@@ -19,8 +19,9 @@ object Impact {
     /** One step of a run: what's shown, at what rate (0: a still frame). */
     data class Step(val label: String, val fps: Int)
 
-    /** The steps: STILL is the base the others are measured against. */
-    val STEPS = listOf(Step("STILL", 0)) + PowerProfile.entries.map { Step(it.label, it.fps) }
+    /** The steps on a display with these [refreshRates] (each profile's rate there): STILL is the base the others are measured against. */
+    fun steps(refreshRates: List<Float>): List<Step> =
+        listOf(Step("STILL", 0)) + PowerProfile.entries.map { Step(it.label, profileFps(it, refreshRates)) }
 
     /** How long each step runs (s), and the first part of it that's left out (the current settles after a change). */
     const val STEP_SECONDS = 45

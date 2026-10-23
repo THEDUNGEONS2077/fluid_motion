@@ -47,6 +47,8 @@ class ImpactTest {
         assertTrue(r, "STILL: 600 mA" in r)
         assertTrue(r, "BALANCED 30: +40 mA (+0.8% an hour)" in r)
         assertTrue(r, "GPU 1.20 ms" in r)
-        assertEquals(listOf("STILL", "ECO", "BALANCED", "SMOOTH"), Impact.STEPS.map { it.label })
+        assertEquals(listOf("STILL", "ECO", "BALANCED", "SMOOTH"), Impact.steps(emptyList()).map { it.label })
+        // On the S25 Ultra's display, ECO is measured at the rate it really draws at.
+        assertEquals(listOf(0, 24, 30, 60), Impact.steps(listOf(10f, 24f, 30f, 48f, 60f)).map { it.fps })
     }
 }

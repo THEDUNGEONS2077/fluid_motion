@@ -203,7 +203,7 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, modifier: Modifier
         SectionTitle("POWER")
         Segmented(PowerProfile.entries.map { it.label }, state.power.profile.ordinal, { state.choosePower(state.power.copy(profile = PowerProfile.entries[it])) })
         DeckText(
-            "${state.power.profile.fps} frames a second while the wallpaper is on screen; nothing at all while it's hidden.",
+            "${state.profileFps} frames a second on this display while the wallpaper is on screen; nothing at all while it's hidden.",
             DeckType.detail,
             d.textDim,
             Modifier.padding(top = DeckSize.sm, bottom = DeckSize.xs),

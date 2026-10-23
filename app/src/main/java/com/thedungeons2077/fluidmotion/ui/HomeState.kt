@@ -30,6 +30,7 @@ import com.thedungeons2077.fluidmotion.lib.Palette
 import com.thedungeons2077.fluidmotion.lib.PowerChoice
 import com.thedungeons2077.fluidmotion.lib.PowerState
 import com.thedungeons2077.fluidmotion.lib.frameRate
+import com.thedungeons2077.fluidmotion.lib.profileFps
 import com.thedungeons2077.fluidmotion.render.FrameStats
 import com.thedungeons2077.fluidmotion.render.RenderLoop
 import com.thedungeons2077.fluidmotion.scene.SceneKind
@@ -135,6 +136,9 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         applyRate()
     }
 
+    /** The chosen profile's rate on this display (before battery saver and heat). */
+    val profileFps: Int get() = profileFps(power.profile, powerState.refreshRates)
+
     /** The rate the preview draws at: the same rule as the wallpaper's. */
     val fps: Int get() = frameRate(power, powerState)
 
@@ -171,7 +175,8 @@ class HomeState(private val context: Context, private val settings: Settings, pr
             try {
                 val results = mutableListOf<Impact.Result>()
                 val samples = FloatArray(Impact.STEP_SECONDS)
-                Impact.STEPS.forEachIndexed { index, step ->
+                val steps = Impact.steps(powerState.refreshRates)
+                steps.forEachIndexed { index, step ->
                     // The raw rate: no easing for heat, so each step is what that rate costs.
                     loop.setRate(step.fps, cool = false)
                     var n = 0
@@ -181,7 +186,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     var drawn = 0f
                     var costN = 0
                     for (second in 0 until Impact.STEP_SECONDS) {
-                        impact = ImpactProgress(step.label, index + 1, Impact.STEPS.size, Impact.STEP_SECONDS - second)
+                        impact = ImpactProgress(step.label, index + 1, steps.size, Impact.STEP_SECONDS - second)
                         delay(1000)
                         if (second < Impact.SETTLE_SECONDS) continue
                         Impact.milliamps(battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW))?.let { samples[n++] = it }
@@ -248,7 +253,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
             "fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
             "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · display Hz $modes",
             loop.info,
-            "wallpaper ${selected.label} · ${palette.label} · GLOW ${glow.label} · ${power.profile.label} (${power.profile.fps} fps)" +
+            "wallpaper ${selected.label} · ${palette.label} · GLOW ${glow.label} · ${power.profile.label} ($profileFps fps)" +
                 " · still in saver ${power.stillInSaver} · cool when hot ${power.coolWhenHot}",
             "phone: battery saver ${powerState.powerSave} · thermal status ${powerState.thermal}",
             if (s == null) {

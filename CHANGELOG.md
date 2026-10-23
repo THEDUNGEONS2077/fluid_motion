@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 (build 3)
+ECO now actually saves battery.
+
+- **The finding** (MEASURE IMPACT on the S25 Ultra, 0.2.0): what a wallpaper costs is mostly how fast the screen refreshes, not the drawing. A frame takes about 1 ms of CPU and 1–1.7 ms of GPU at every rate. ECO at 20 fps cost as much as BALANCED at 30, or more, because the display has no rate that 20 fits (it runs at 60, 48, 30, 24 or 10 Hz), so the panel stayed at 60 Hz.
+- **The fix:** each profile now draws at a rate this display can run at. ECO takes the display's own slow rate between 20 and 30 Hz if it has one (24 on the S25 Ultra, so the panel drops to 24 Hz). On a display without one it stays at 20, which fits 60 and 120 Hz evenly. BALANCED (30) and SMOOTH (60) are unchanged.
+- POWER and MEASURE IMPACT show and measure the rate each profile really draws at here. The rates follow the display if its settings change (motion smoothness).
+
+**Please check:** a MEASURE IMPACT run on MATRIX RAIN. ECO should now cost less than BALANCED.
+
 ## 0.2.0 (build 2)
 Measuring what the wallpapers really cost, and a little less work for the same picture.
 

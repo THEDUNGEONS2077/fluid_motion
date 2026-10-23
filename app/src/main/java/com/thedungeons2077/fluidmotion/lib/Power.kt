@@ -46,7 +46,24 @@ data class PowerState(
     val powerSave: Boolean = false,
     /** The thermal status (Thermal.*). */
     val thermal: Int = Thermal.NONE,
+    /** The refresh rates the display can run at (Hz; empty if unknown). */
+    val refreshRates: List<Float> = emptyList(),
 )
+
+/**
+ * A profile's rate on this display. The screen's refresh is most of what a
+ * live wallpaper costs (measured on the S25 Ultra, 0.2.0: ECO at 20 fps
+ * cost as much as BALANCED at 30, because no refresh rate fits 20 and the
+ * panel stayed at 60 Hz). So ECO takes the display's own slow rate if it
+ * has one from 20 up to (not including) 30, 24 Hz on the S25 Ultra, and
+ * the panel can drop to it; otherwise 20, which fits 60 and 120 Hz evenly.
+ * BALANCED and SMOOTH fit every common display as they are.
+ */
+fun profileFps(profile: PowerProfile, refreshRates: List<Float>): Int {
+    if (profile != PowerProfile.ECO) return profile.fps
+    val slow = refreshRates.filter { it >= 19.5f && it < 29.5f }.minOrNull() ?: return profile.fps
+    return Math.round(slow)
+}
 
 /** What the user chose about power. */
 data class PowerChoice(
@@ -63,10 +80,11 @@ data class PowerChoice(
  * moderate thermal status halves it (to no fewer than 10).
  */
 fun frameRate(choice: PowerChoice, state: PowerState): Int {
+    val fps = profileFps(choice.profile, state.refreshRates)
     if (state.powerSave && choice.stillInSaver) return 0
     if (choice.coolWhenHot && state.thermal >= Thermal.SEVERE) return 0
-    if (choice.coolWhenHot && state.thermal >= Thermal.MODERATE) return maxOf(10, choice.profile.fps / 2)
-    return choice.profile.fps
+    if (choice.coolWhenHot && state.thermal >= Thermal.MODERATE) return maxOf(10, fps / 2)
+    return fps
 }
 
 /**
