@@ -324,7 +324,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
   }
 
   // --- NEURAL NET (scene/neural/NeuralRenderer.kt) --------------------------------------
-  function neural(d, low = false) {
+  function neural(d, low = false, name = low ? 'neural-low' : 'neural') {
     const g = d.glow;
     const c = d.colors;
     const t = scaledTarget(low ? d.lowScale : 1);
@@ -391,11 +391,11 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform4fv(spark.u('uSparks'), new Float32Array(sparks));
     quads(sparks.length / 4);
     t.end();
-    snapshot(low ? 'neural-low' : 'neural', `${low ? `LOW: drawn ${t.width}×${t.height}, no link glow; ` : ''}${d.nodes.length / 2} nodes, ${linkCount} links, ${sparks.length / 4} sparks, ${d.bokeh.length / 4} bokeh;`);
+    snapshot(name, `${low ? `LOW: drawn ${t.width}×${t.height}, no link glow; ` : ''}${d.nodes.length / 2} nodes, ${linkCount} links, ${sparks.length / 4} sparks, ${d.bokeh.length / 4} bokeh;`);
   }
 
   // --- VELOCITY (scene/velocity/VelocityRenderer.kt) ------------------------------------
-  function velocity(d, low = false) {
+  function velocity(d, low = false, name = low ? 'velocity-low' : 'velocity') {
     const target = scaledTarget(low ? d.lowScale : 1);
     const px = d.density * (low ? d.lowScale : 1);
     const panel = program('velocity_panel.vert', 'velocity_panel.frag');
@@ -473,11 +473,11 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     fullScreen();
     gl.disable(gl.BLEND);
     target.end();
-    snapshot(low ? 'velocity-low' : 'velocity', `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${d.panels.length / 4} panels, ${ns} streaks;`);
+    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${d.panels.length / 4} panels, ${ns} streaks;`);
   }
 
   // --- DATA FLOW (scene/flow/FlowRenderer.kt) -------------------------------------------
-  function flow(d, low = false) {
+  function flow(d, low = false, name = low ? 'flow-low' : 'flow') {
     const target = scaledTarget(low ? d.lowScale : 1);
     const px = d.density * (low ? d.lowScale : 1);
     const t = d.tones;
@@ -575,7 +575,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.disable(gl.BLEND);
     target.end();
     snapshot(
-      low ? 'flow-low' : 'flow',
+      name,
       `${low ? `LOW: drawn ${target.width}×${target.height}, no soft glow or halos; ` : ''}${d.traces} traces (${boardSegs.count} stretches), ${d.pulses} packets (${lightSegs.count} lit stretches), ${d.flashes} flashes, ${lightChips.count} chips lit;`,
     );
   }
@@ -590,6 +590,12 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     ['velocity-low', () => velocity(dumps.velocity, true)],
     ['flow', () => flow(dumps.flow)],
     ['flow-low', () => flow(dumps.flow, true)],
+    // ZOOM: each laid out for a screen 1/zoom as big, drawn zoom times as large (the dumps carry it).
+    ['rain-zoom', () => rain(dumps['rain-zoom'], 'rain-zoom')],
+    ['neural-zoom', () => neural(dumps['neural-zoom'], false, 'neural-zoom')],
+    ['velocity-zoom', () => velocity(dumps['velocity-zoom'], false, 'velocity-zoom')],
+    ['flow-zoom', () => flow(dumps['flow-zoom'], false, 'flow-zoom')],
+    ['flow-zoom-out', () => flow(dumps['flow-zoom-out'], false, 'flow-zoom-out')],
   ];
   for (const [name, fn] of runs) {
     try {

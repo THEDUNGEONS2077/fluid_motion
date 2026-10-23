@@ -37,6 +37,7 @@ import com.thedungeons2077.fluidmotion.lib.PowerState
 import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.Usage
 import com.thedungeons2077.fluidmotion.lib.UsageDay
+import com.thedungeons2077.fluidmotion.lib.Zoom
 import com.thedungeons2077.fluidmotion.lib.frameRate
 import com.thedungeons2077.fluidmotion.lib.profileFps
 import com.thedungeons2077.fluidmotion.render.FrameStats
@@ -66,12 +67,14 @@ private const val STEP_MS = SETTLE_MS + 1000L * Calibration.MEASURE_SECONDS
 
 /** The home screen's state. */
 class HomeState(private val context: Context, private val settings: Settings, private val loop: RenderLoop) {
-    /** The wallpaper shown, and its colours and glow. */
+    /** The wallpaper shown, and its colours, glow and zoom. */
     var selected by mutableStateOf(settings.selected)
         private set
     var palette by mutableStateOf(settings.palette(selected))
         private set
     var glow by mutableStateOf(settings.glow(selected))
+        private set
+    var zoom by mutableStateOf(settings.zoom(selected))
         private set
 
     /** The power choices (all wallpapers), and the phone's state. */
@@ -138,6 +141,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         settings.selected = kind
         palette = settings.palette(kind)
         glow = settings.glow(kind)
+        zoom = settings.zoom(kind)
         loop.setKind(kind)
         applyLook()
     }
@@ -153,6 +157,32 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         settings.setGlow(selected, g)
         applyLook()
     }
+
+    /** Zooms the shown wallpaper a step in ([direction] 1) or out (-1), and keeps it: its zoom from then on. */
+    fun stepZoom(direction: Int) = chooseZoom(Zoom.step(zoom, direction))
+
+    /** Sets the shown wallpaper's zoom and keeps it (100%: back to as designed). */
+    fun chooseZoom(z: Float) {
+        zoom = Zoom.nearest(z)
+        settings.setZoom(selected, zoom)
+        applyLook()
+    }
+
+    /**
+     * A pinch on the preview, as it goes: [z] shown at once (a step at a
+     * time, so the scene re-lays itself out only as a step is crossed),
+     * kept only when the fingers lift ([keepZoom]); the home screen's
+     * wallpaper follows then, once.
+     */
+    fun previewZoom(z: Float) {
+        val step = Zoom.nearest(z)
+        if (step == zoom) return
+        zoom = step
+        applyLook()
+    }
+
+    /** The pinch is over: keeps the zoom it ended at. */
+    fun keepZoom() = settings.setZoom(selected, zoom)
 
     fun choosePower(c: PowerChoice) {
         power = c
@@ -207,7 +237,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         return "${Build.FINGERPRINT}|${m.widthPixels}x${m.heightPixels}@${m.density}"
     }
 
-    private fun applyLook() = loop.setLook(palette.colors, glow, quality)
+    private fun applyLook() = loop.setLook(palette.colors, glow, quality, zoom)
 
     /** Sends the rate to the preview (not while a run sets its own). */
     private fun applyRate() {
@@ -241,7 +271,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     // Drawn at the highest of the group (they all draw the same here). The look first, so a new
                     // wallpaper's scene is made at this quality (not made, then rebuilt).
                     val q = group.last()
-                    loop.setLook(settings.palette(kind).colors, settings.glow(kind), q)
+                    loop.setLook(settings.palette(kind).colors, settings.glow(kind), q, settings.zoom(kind))
                     loop.setKind(kind)
                     run = RunProgress(
                         title = "CALIBRATING",

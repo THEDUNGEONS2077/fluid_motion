@@ -53,6 +53,9 @@ class NeuralRenderer(context: Context) : Scene {
     private var screenW = 0
     private var screenH = 0
     private var density = 1f
+    private var zoom = 1f
+    // A new zoom: the net is made again at the next frame (with the context current).
+    private var layoutDirty = false
 
     // The links on this screen (node a, node b, weight), sent once.
     private var linkVbo = 0
@@ -72,7 +75,17 @@ class NeuralRenderer(context: Context) : Scene {
         screenW = width
         screenH = height
         this.density = density
-        val s = NeuralSim(width / density, height / density, Rng(System.nanoTime().toInt()))
+        build()
+    }
+
+    /**
+     * A new net for the screen at the zoom: laid out for a screen 1/zoom as
+     * big (dp), with its nodes and bokeh for the area that shows (NeuralSim).
+     */
+    private fun build() {
+        layoutDirty = false
+        val dp = density * zoom
+        val s = NeuralSim(screenW / dp, screenH / dp, Rng(System.nanoTime().toInt()), zoom)
         sim = s
         check(s.n <= NeuralFrame.MAX_NODES && s.nb <= NeuralFrame.MAX_BOKEH) { "scene larger than the shaders' arrays" }
         sendLinks(s)
@@ -80,8 +93,8 @@ class NeuralRenderer(context: Context) : Scene {
         targetDirty = true
     }
 
-    /** The px per dp drawn at: the screen's, or fewer at a lower quality. */
-    private val pxPerDp: Float get() = density * quality.scale(density)
+    /** The px per dp drawn at: the screen's (or fewer at a lower quality), times the zoom. */
+    private val pxPerDp: Float get() = density * quality.scale(density) * zoom
 
     /** The links as a static instance buffer: two node numbers and a weight each. */
     private fun sendLinks(s: NeuralSim) {
@@ -105,6 +118,7 @@ class NeuralRenderer(context: Context) : Scene {
     }
 
     override fun render(dt: Float) {
+        if (layoutDirty && screenW > 0) build()
         val s = sim ?: return
         if (dt > 0f) s.advance(min(dt, MAX_FRAME_STEP))
         if (targetDirty) {
@@ -192,6 +206,12 @@ class NeuralRenderer(context: Context) : Scene {
         if (quality == this.quality) return
         this.quality = quality
         targetDirty = true
+    }
+
+    override fun setZoom(zoom: Float) {
+        if (zoom == this.zoom) return
+        this.zoom = zoom
+        if (sim != null) layoutDirty = true
     }
 
     override fun release() {

@@ -39,6 +39,14 @@ interface Scene {
      */
     fun setQuality(quality: Quality)
 
+    /**
+     * A new zoom (lib/Zoom.kt, 1 = as designed): the scene lays itself out
+     * for a screen 1/zoom as big and draws it zoom times as large, at the
+     * resolution QUALITY sets for the screen (zoomed in, it's as sharp).
+     * Like a new quality, it's applied at the next frame.
+     */
+    fun setZoom(zoom: Float)
+
     /** Frees its GL objects. */
     fun release()
 }

@@ -95,6 +95,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String, re
     private var colors: PaletteColors = Palettes.PHOSPHOR.colors
     private var glow = GlowLevel.DEFAULT
     private var quality = Quality.DEFAULT
+    private var zoom = 1f
     private var scheduled = false
     private var lastFrameNs = 0L
     private var frames = 0L
@@ -218,15 +219,17 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String, re
         noteUsage()
     }
 
-    /** Colours, glow and quality (a still wallpaper redraws to show them). */
-    fun setLook(colors: PaletteColors, glow: GlowLevel, quality: Quality) = post {
+    /** Colours, glow, quality and zoom (a still wallpaper redraws to show them). */
+    fun setLook(colors: PaletteColors, glow: GlowLevel, quality: Quality, zoom: Float) = post {
         this.colors = colors
         this.glow = glow
         this.quality = quality
+        this.zoom = zoom
         scene?.let {
             it.setPalette(colors)
             it.setGlow(glow)
             it.setQuality(quality)
+            it.setZoom(zoom)
         }
         if (fps == 0) drawStill()
     }
@@ -290,6 +293,7 @@ class RenderLoop(private val context: Context, kind: SceneKind, name: String, re
             it.setPalette(colors)
             it.setGlow(glow)
             it.setQuality(quality)
+            it.setZoom(zoom)
         }
     } catch (e: RuntimeException) {
         Log.e(GL_TAG, "can't draw ${kind.id}", e)

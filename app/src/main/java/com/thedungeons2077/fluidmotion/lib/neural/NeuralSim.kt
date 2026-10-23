@@ -13,7 +13,9 @@
  * palette along a diagonal ([shade]).
  *
  * On a phone, counts are per screen, not per area: at the web's density a
- * portrait phone would show only a handful of nodes. Motion keeps its own
+ * portrait phone would show only a handful of nodes. Per screen at 100%:
+ * zoomed, a screen shows 1/zoom² of that area, so the counts scale with it
+ * (within the shaders' arrays). Motion keeps its own
  * phases, advanced by each frame's step and wrapped: no clock goes into a
  * sine, so a wallpaper that runs for months moves as smoothly as on day one.
  */
@@ -147,7 +149,7 @@ fun linkNodes(xs: FloatArray, ys: FloatArray, want: IntArray, maxLen: Float, rng
 }
 
 /** The neural net on a [w] × [h] dp screen. */
-class NeuralSim(val w: Float, val h: Float, private val rng: Rng) {
+class NeuralSim(val w: Float, val h: Float, private val rng: Rng, zoom: Float = 1f) {
     /** Nodes: homes, drift (amplitude, angular speed, phase), core radius, light (flash) and whether it's rising; where they are now. */
     val n: Int
     val hx: FloatArray
@@ -194,7 +196,8 @@ class NeuralSim(val w: Float, val h: Float, private val rng: Rng) {
     init {
         val p = NeuralParams
         val area = (1 + 2 * p.PAD) * (1 + 2 * p.PAD)
-        n = maxOf(12, (p.NODES_PER_SCREEN * area).roundToInt())
+        // Per screen at 100%: zoomed, the screen shows 1/zoom² of that area, so as many fewer (or more) nodes, within the shaders' arrays.
+        n = (p.NODES_PER_SCREEN * area / (zoom * zoom)).roundToInt().coerceIn(12, NeuralFrame.MAX_NODES)
         hx = FloatArray(n); hy = FloatArray(n); ax = FloatArray(n); ay = FloatArray(n)
         wx = FloatArray(n); wy = FloatArray(n); px = FloatArray(n); py = FloatArray(n)
         radius = FloatArray(n); flash = FloatArray(n); rise = BooleanArray(n); x = FloatArray(n); y = FloatArray(n)
@@ -234,7 +237,7 @@ class NeuralSim(val w: Float, val h: Float, private val rng: Rng) {
             lists[links[2 * k + 1]].add(k)
         }
         linksOf = Array(n) { lists[it].toIntArray() }
-        nb = (p.BOKEH_PER_SCREEN).roundToInt()
+        nb = (p.BOKEH_PER_SCREEN / (zoom * zoom)).roundToInt().coerceIn(4, NeuralFrame.MAX_BOKEH)
         bx = FloatArray(nb); by = FloatArray(nb); br = FloatArray(nb); ba = FloatArray(nb); bvx = FloatArray(nb); bvy = FloatArray(nb)
         for (i in 0 until nb) {
             bx[i] = rng.next() * w

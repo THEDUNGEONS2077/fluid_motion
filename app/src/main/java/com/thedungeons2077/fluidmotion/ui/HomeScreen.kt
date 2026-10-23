@@ -54,6 +54,14 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import com.thedungeons2077.fluidmotion.lib.PowerMode
 import com.thedungeons2077.fluidmotion.lib.Quality
+import com.thedungeons2077.fluidmotion.lib.Zoom
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -86,7 +94,8 @@ fun HomeScreen(state: HomeState, loop: RenderLoop) {
     CompositionLocalProvider(LocalDeck provides d, LocalIndication provides remember(d.accent) { WashIndication(d.accent10) }) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             PreviewSurface(loop, Modifier.fillMaxSize())
-            // The wallpaper itself: a tap shows or hides the controls.
+            // The wallpaper itself: a tap shows or hides the controls; a pinch zooms it (not while measuring).
+            // The pinch is the inner modifier, so it sees the fingers first: a pinch is never also a tap.
             Box(
                 Modifier
                     .fillMaxSize()
@@ -96,7 +105,8 @@ fun HomeScreen(state: HomeState, loop: RenderLoop) {
                         indication = null,
                         role = Role.Button,
                         onClickLabel = if (state.panelOpen) "hide the controls" else "show the controls",
-                    ) { state.panelOpen = !state.panelOpen },
+                    ) { state.panelOpen = !state.panelOpen }
+                    .pointerInput(measuring) { if (!measuring) pinchToZoom(state) },
             )
             Column(
                 Modifier
@@ -214,6 +224,19 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, onCalibrate: () ->
 
         SectionTitle("GLOW")
         Segmented(GlowLevel.entries.map { it.label }, state.glow.ordinal, { state.chooseGlow(GlowLevel.entries[it]) })
+
+        SectionTitle("ZOOM · ${state.selected.label}")
+        Stepper(
+            value = Zoom.label(state.zoom),
+            what = "zoom",
+            canDown = state.zoom > Zoom.MIN,
+            canUp = state.zoom < Zoom.MAX,
+            canReset = state.zoom != Zoom.DEFAULT,
+            onDown = { state.stepZoom(-1) },
+            onUp = { state.stepZoom(1) },
+            onReset = { state.chooseZoom(Zoom.DEFAULT) },
+        )
+        DeckText("Or pinch the wallpaper. Each wallpaper keeps its own zoom, as sharp at any.", DeckType.detail, d.text, Modifier.padding(top = DeckSize.sm))
 
         SectionTitle("POWER")
         Segmented(PowerMode.entries.map { it.label }, state.mode.ordinal, { state.chooseMode(PowerMode.entries[it]) })
@@ -425,6 +448,37 @@ private fun status(state: HomeState): String {
     }
     val low = if (s?.lowPriority == true) " · GPU LOW PRIORITY" else ""
     return why + low + cost
+}
+
+/** A pinch before a zoom starts to follow it: the fingers' spread must change by this share (so two fingers set down don't nudge it). */
+private const val PINCH_SLOP = 0.06f
+
+/**
+ * A pinch on the preview zooms the wallpaper: its zoom times how far the
+ * fingers spread, a step at a time as they move (HomeState.previewZoom),
+ * kept when they lift. One finger is left alone: a tap still shows or hides
+ * the controls.
+ */
+private suspend fun PointerInputScope.pinchToZoom(state: HomeState) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        val start = state.zoom
+        var spread = 1f
+        var pinching = false
+        do {
+            val event = awaitPointerEvent()
+            if (event.changes.count { it.pressed } >= 2) {
+                spread *= event.calculateZoom()
+                if (!pinching && abs(spread - 1f) > PINCH_SLOP) pinching = true
+                if (pinching) {
+                    state.previewZoom(start * spread)
+                    // Taken: the tap underneath sees moved fingers and doesn't fire.
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                }
+            }
+        } while (event.changes.any { it.pressed })
+        if (pinching) state.keepZoom()
+    }
 }
 
 /** A wallpaper's picture. */

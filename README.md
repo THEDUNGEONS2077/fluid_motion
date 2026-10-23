@@ -24,10 +24,12 @@ Android 8.1 or newer, with OpenGL ES 3 (practically every phone since 2015). It 
 
 ## Use
 1. Open **fluid_motion**.
-2. Pick a wallpaper, its colours and its glow. The screen shows it running, exactly as it will on your home screen.
+2. Pick a wallpaper, its colours, its glow and its zoom. The screen shows it running, exactly as it will on your home screen.
 3. Tap **SET AS WALLPAPER ↗**. Android shows its own preview; tap **Set wallpaper** there. Samsung phones ask whether it's for the home screen, or the home and lock screens.
 
-You can change the colours, glow and power settings any time, even while the wallpaper is set: it changes straight away. Tap the wallpaper in the app to hide the controls and see it whole.
+You can change the colours, glow, zoom and power settings any time, even while the wallpaper is set: it changes straight away. Tap the wallpaper in the app to hide the controls and see it whole.
+
+**ZOOM:** 50% to 200% (**−** / **+**, or pinch the wallpaper in the app). Each wallpaper keeps its own zoom and is shown at it on your home screen. Zoomed in, the glyphs, nodes, traces and chips are larger and fewer, and as sharp as at 100%.
 
 **POWER:**
 - **AUTO** finds the balance for your phone: tap **AUTO CALIBRATE** (about half a minute). It draws each wallpaper at 30 frames a second, at the sharpest quality your phone draws cheaply.

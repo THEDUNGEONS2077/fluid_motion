@@ -20,6 +20,7 @@ import com.thedungeons2077.fluidmotion.lib.PowerChoice
 import com.thedungeons2077.fluidmotion.lib.PowerMode
 import com.thedungeons2077.fluidmotion.lib.PowerProfile
 import com.thedungeons2077.fluidmotion.lib.Quality
+import com.thedungeons2077.fluidmotion.lib.Zoom
 import com.thedungeons2077.fluidmotion.scene.SceneKind
 
 /** The app's settings. */
@@ -92,6 +93,15 @@ class Settings(context: Context) {
     fun glow(kind: SceneKind): GlowLevel = GlowLevel.find(prefs.getString("glow.${kind.id}", null))
 
     fun setGlow(kind: SceneKind, glow: GlowLevel) = write { putString("glow.${kind.id}", glow.name) }
+
+    /** A wallpaper's zoom (lib/Zoom.kt): 100% until chosen. */
+    fun zoom(kind: SceneKind): Float = Zoom.nearest(prefs.getFloat("zoom.${kind.id}", Zoom.DEFAULT))
+
+    /** Sets a wallpaper's zoom (a step; 100% leaves nothing stored, as the web does). */
+    fun setZoom(kind: SceneKind, zoom: Float) = write {
+        val step = Zoom.nearest(zoom)
+        if (step == Zoom.DEFAULT) remove("zoom.${kind.id}") else putFloat("zoom.${kind.id}", step)
+    }
 
     /** The power choices (all wallpapers); its profile is MANUAL's (effectivePower() is what's in force). */
     var power: PowerChoice

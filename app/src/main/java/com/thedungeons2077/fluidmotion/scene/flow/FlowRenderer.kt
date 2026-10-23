@@ -15,7 +15,8 @@
  *      arrays made once.
  * Nothing is allocated per frame. QUALITY below full resolution draws into
  * a smaller frame scaled up after (gl/ScaledTarget.kt); LOW also leaves
- * out the board's soft glow and the packets' halos.
+ * out the board's soft glow and the packets' halos. ZOOM lays the board out
+ * for a screen 1/zoom as big and draws it zoom times as large.
  */
 package com.thedungeons2077.fluidmotion.scene.flow
 
@@ -60,6 +61,9 @@ class FlowRenderer(context: Context) : Scene {
     private var screenW = 0
     private var screenH = 0
     private var density = 1f
+    private var zoom = 1f
+    // A new zoom: the board is laid out again at the next frame (with the context current).
+    private var layoutDirty = false
 
     // The board's instances (sent once per board, palette, glow and quality).
     private var boardSegs: StaticInstances? = null
@@ -109,8 +113,15 @@ class FlowRenderer(context: Context) : Scene {
         screenW = width
         screenH = height
         this.density = density
+        build()
+    }
+
+    /** A new board at the zoom: laid out for a screen 1/zoom as big (dp), drawn zoom times as large. */
+    private fun build() {
+        layoutDirty = false
+        val dp = density * zoom
         val rng = Rng(System.nanoTime().toInt())
-        val b = FlowBoard.build(width / density, height / density, rng)
+        val b = FlowBoard.build(screenW / dp, screenH / dp, rng)
         board = b
         sim = FlowSim(b, rng)
         // Room for the light on this board, made once.
@@ -125,8 +136,8 @@ class FlowRenderer(context: Context) : Scene {
         dirty = true
     }
 
-    /** The px per dp drawn at: the screen's, or fewer at a lower quality. */
-    private val pxPerDp: Float get() = density * quality.scale(density)
+    /** The px per dp drawn at: the screen's (or fewer at a lower quality), times the zoom. */
+    private val pxPerDp: Float get() = density * quality.scale(density) * zoom
 
     /** The board's instances, for its palette, glow and quality (and the glow the light is drawn with). */
     private fun sendBoard(b: FlowBoard) {
@@ -141,6 +152,7 @@ class FlowRenderer(context: Context) : Scene {
     }
 
     override fun render(dt: Float) {
+        if (layoutDirty && screenW > 0) build()
         val s = sim ?: return
         val b = board ?: return
         if (dt > 0f) s.advance(min(dt, MAX_FRAME_STEP))
@@ -242,6 +254,12 @@ class FlowRenderer(context: Context) : Scene {
         this.quality = quality
         targetDirty = true
         boardDirty = true
+    }
+
+    override fun setZoom(zoom: Float) {
+        if (zoom == this.zoom) return
+        this.zoom = zoom
+        if (sim != null) layoutDirty = true
     }
 
     override fun release() {

@@ -53,8 +53,11 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -293,6 +296,63 @@ fun Toggle(label: String, detail: String, checked: Boolean, onChange: (Boolean) 
         ) {
             DeckText(if (checked) "ON" else "OFF", DeckType.small, if (checked) d.textBright else d.textDim, glow = if (checked) d.glowText else null)
         }
+    }
+}
+
+/**
+ * A value stepped with buttons (ZOOM): − and + either side of it, RESET
+ * after. Each is a button to accessibility services, named for what it does
+ * from [what] ("zoom": "zoom out", "zoom in", "reset the zoom to 100%"); a
+ * button that can't go further is dimmed and does nothing. The value is
+ * read out as it changes.
+ */
+@Composable
+fun Stepper(
+    value: String,
+    what: String,
+    canDown: Boolean,
+    canUp: Boolean,
+    canReset: Boolean,
+    onDown: () -> Unit,
+    onUp: () -> Unit,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val d = LocalDeck.current
+    val shape = RoundedCornerShape(DeckSize.radius)
+    Row(modifier.fillMaxWidth().height(DeckSize.control), horizontalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
+        StepButton("−", "$what out", canDown, onDown, Modifier.width(DeckSize.control))
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .border(DeckSize.hairline, d.line, shape)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+            contentAlignment = Alignment.Center,
+        ) {
+            DeckText(value, DeckType.control, d.textBright, glow = d.glowText, maxLines = 1)
+        }
+        StepButton("+", "$what in", canUp, onUp, Modifier.width(DeckSize.control))
+        StepButton("RESET", "reset the $what to 100%", canReset, onReset)
+    }
+}
+
+/** One of a stepper's buttons: its [label] is what accessibility services read (not the sign on it). */
+@Composable
+private fun StepButton(text: String, label: String, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val d = LocalDeck.current
+    val shape = RoundedCornerShape(DeckSize.radius)
+    Box(
+        modifier
+            .fillMaxHeight()
+            .background(d.surface, shape)
+            .border(DeckSize.hairline, d.line, shape)
+            .semantics { contentDescription = label }
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = DeckSize.md),
+        contentAlignment = Alignment.Center,
+    ) {
+        DeckText(text, DeckType.control, if (enabled) d.text else d.textDim, Modifier.clearAndSetSemantics {}, maxLines = 1)
     }
 }
 

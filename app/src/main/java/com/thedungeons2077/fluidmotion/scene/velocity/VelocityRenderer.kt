@@ -55,6 +55,9 @@ class VelocityRenderer(context: Context) : Scene {
     private var screenW = 0
     private var screenH = 0
     private var density = 1f
+    private var zoom = 1f
+    // A new zoom: the scene is made again at the next frame (with the context current).
+    private var layoutDirty = false
     private var tile = 0
     private var dirty = true
 
@@ -70,15 +73,22 @@ class VelocityRenderer(context: Context) : Scene {
         screenW = width
         screenH = height
         this.density = density
+        build()
+    }
+
+    /** A new scene at the zoom: laid out for a screen 1/zoom as big (dp), its sizes grown by the zoom (VelocitySim). */
+    private fun build() {
+        layoutDirty = false
+        val dp = density * zoom
         val rng = Rng(System.nanoTime().toInt())
-        sim = VelocitySim(width / density, height / density, rng)
+        sim = VelocitySim(screenW / dp, screenH / dp, rng, zoom)
         makeTile(rng)
         dirty = true
         targetDirty = true
     }
 
-    /** The px per dp drawn at: the screen's, or fewer at a lower quality. */
-    private val pxPerDp: Float get() = density * quality.scale(density)
+    /** The px per dp drawn at: the screen's (or fewer at a lower quality), times the zoom. */
+    private val pxPerDp: Float get() = density * quality.scale(density) * zoom
 
     /** The fine motion-blur lines: one brightness per dp row, mostly faint, now and then bright (the web's pattern). */
     private fun makeTile(rng: Rng) {
@@ -99,6 +109,7 @@ class VelocityRenderer(context: Context) : Scene {
     }
 
     override fun render(dt: Float) {
+        if (layoutDirty && screenW > 0) build()
         val s = sim ?: return
         if (dt > 0f) s.advance(min(dt, MAX_FRAME_STEP))
         if (targetDirty) {
@@ -203,6 +214,12 @@ class VelocityRenderer(context: Context) : Scene {
         if (quality == this.quality) return
         this.quality = quality
         targetDirty = true
+    }
+
+    override fun setZoom(zoom: Float) {
+        if (zoom == this.zoom) return
+        this.zoom = zoom
+        if (sim != null) layoutDirty = true
     }
 
     override fun release() {

@@ -21,7 +21,10 @@
  * HIGH, up to 3 px per dp, is full resolution on most phones; every pixel
  * is memory traffic) and the composite scales it up to the screen. A new palette applies to glyphs drawn
  * from then on, so the change rains in, as on the web; a new glow level
- * draws a new atlas, the same way.
+ * draws a new atlas, the same way. ZOOM makes the rain again for a screen
+ * 1/zoom as big, its glyphs drawn zoom times as large (at most
+ * RainParams.MAX_ATLAS_PX_PER_DP px per dp: past that the layer is drawn
+ * smaller and scaled up).
  */
 package com.thedungeons2077.fluidmotion.scene.rain
 
@@ -38,6 +41,9 @@ import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
 import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.desaturate
+import com.thedungeons2077.fluidmotion.lib.rain.AtlasLayout
+import com.thedungeons2077.fluidmotion.lib.rain.BASE_GLYPHS
+import com.thedungeons2077.fluidmotion.lib.rain.KATAKANA
 import com.thedungeons2077.fluidmotion.lib.rain.RainParams
 import com.thedungeons2077.fluidmotion.lib.rain.RainRecorder
 import com.thedungeons2077.fluidmotion.lib.rain.RainSim
@@ -68,6 +74,10 @@ class RainRenderer(private val context: Context) : Scene {
     private var colors: PaletteColors = Palettes.PHOSPHOR.colors
     private var glow = GlowLevel.DEFAULT
     private var quality = Quality.DEFAULT
+    private var zoom = 1f
+
+    // The GPU's largest texture (px), read once: the atlas must fit in it.
+    private var maxTexture = 0
 
     // Rebuilds asked for, done at the next frame (with the context current): a new atlas (glow), or everything (quality).
     private var atlasDirty = false
@@ -142,24 +152,49 @@ class RainRenderer(private val context: Context) : Scene {
         screenH = height
         this.density = density
         val scale = quality.scale(density)
-        val nextPx = density * scale
+        // Zoomed: glyphs zoom times as large. Past what the atlas can be, fewer px per dp, the layer smaller to match.
+        val wanted = density * scale * zoom
+        val nextPx = atlasPx(wanted)
+        val layerScale = scale * nextPx / wanted
         // A new atlas only if the glyphs' size changed.
         if (atlas == null || nextPx != pxPerDp) {
             atlas?.release()
             pxPerDp = nextPx
             atlas = GlyphAtlas.build(typeface, pxPerDp, RainParams.GLOW.getValue(glow))
         }
-        makeLayer((width * scale).roundToInt(), (height * scale).roundToInt())
+        makeLayer((width * layerScale).roundToInt(), (height * layerScale).roundToInt())
         opsDirty = true
         fadeDirty = true
         // A new rain for the screen, the screen opening full (the pre-warm paints it).
         val a = atlas!!
         recorder.slotOf = a.slotOf
-        sim = RainSim(width / density, height / density, a.glyphCount, Rng(System.nanoTime().toInt())).also { s ->
+        sim = RainSim(width / (density * zoom), height / (density * zoom), a.glyphCount, Rng(System.nanoTime().toInt())).also { s ->
             beginLayer()
             s.prewarm(recorder)
             stream.drawQuads()
         }
+    }
+
+    /**
+     * The px per dp the glyphs are drawn at, for [wanted]: as wanted, up to
+     * RainParams.MAX_ATLAS_PX_PER_DP and what fits the GPU's largest texture
+     * at the largest glow (so a later glow change can't outgrow it).
+     */
+    private fun atlasPx(wanted: Float): Float {
+        if (maxTexture == 0) {
+            val v = IntArray(1)
+            GLES30.glGetIntegerv(GLES30.GL_MAX_TEXTURE_SIZE, v, 0)
+            // OpenGL ES 3.0 promises at least 2048.
+            maxTexture = maxOf(2048, v[0])
+        }
+        val biggest = RainParams.GLOW.getValue(GlowLevel.MAX)
+        var px = min(wanted, RainParams.MAX_ATLAS_PX_PER_DP)
+        while (px > 1f) {
+            val a = AtlasLayout(px, biggest, KATAKANA.length + BASE_GLYPHS.length)
+            if (a.width <= maxTexture && a.height <= maxTexture) break
+            px *= 0.9f
+        }
+        return px
     }
 
     /** A new, clear trail layer of [w] × [h] px. */
@@ -230,7 +265,7 @@ class RainRenderer(private val context: Context) : Scene {
 
     override fun render(dt: Float) {
         if (rebuild) {
-            // A new quality: a new layer (and atlas, if its size changed), the screen opening full again.
+            // A new quality or zoom: a new layer (and atlas, if its size changed), the screen opening full again.
             rebuild = false
             atlasDirty = false
             val w = screenW
@@ -283,6 +318,12 @@ class RainRenderer(private val context: Context) : Scene {
     override fun setQuality(quality: Quality) {
         if (quality == this.quality) return
         this.quality = quality
+        if (sim != null) rebuild = true
+    }
+
+    override fun setZoom(zoom: Float) {
+        if (zoom == this.zoom) return
+        this.zoom = zoom
         if (sim != null) rebuild = true
     }
 

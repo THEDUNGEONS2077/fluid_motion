@@ -68,6 +68,15 @@ object RainParams {
     /** The longest real step taken in one frame (s). */
     const val MAX_FRAME_STEP = 0.1f
 
+    /**
+     * The most px per dp the glyph atlas is drawn at. Zoomed in, the glyphs
+     * grow and so does the atlas (16 slots wide, each a glyph and its glow):
+     * at 200% on a 3.75 px-per-dp screen it would be 4416 px wide, over some
+     * GPUs' limit, and 60 MB. Past this (5.6 is the S25 Ultra's 200% at
+     * FHD+) the trail layer is drawn at fewer px per dp and scaled up.
+     */
+    const val MAX_ATLAS_PX_PER_DP = 6f
+
     /** The glow levels ('low' is the look before cyberdeck_terminal 0.5; 'high' the default). */
     val GLOW = mapOf(
         GlowLevel.LOW to RainGlow(0.4f, 5f, 1, 2f),

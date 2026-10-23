@@ -7,7 +7,9 @@
  * show what the phone will draw.
  *
  * Not a check by itself (it asserts only that it wrote something): the
- * harness looks at the result.
+ * harness looks at the result. Each scene is also dumped zoomed (ZOOM:
+ * laid out for a screen 1/zoom as big, drawn zoom times as large, at the
+ * same resolution), as the renderers lay it out.
  */
 package com.thedungeons2077.fluidmotion.tools
 
@@ -75,11 +77,13 @@ class FrameDumpTest {
         dumpRain(Quality.HIGH, "rain.json")
         // LOW draws a smaller trail layer with a smaller atlas: the same rain (the same seed), scaled up.
         dumpRain(Quality.LOW, "rain-low.json")
+        // Zoomed in (150%): larger glyphs, fewer columns, the same layer.
+        dumpRain(Quality.HIGH, "rain-zoom.json", 1.5f)
     }
 
-    /** The rain at [quality], to [name]. */
-    private fun dumpRain(quality: Quality, name: String) {
-        val px = density * quality.scale(density)
+    /** The rain at [quality] and [zoom], to [name]. */
+    private fun dumpRain(quality: Quality, name: String, zoom: Float = 1f) {
+        val px = density * quality.scale(density) * zoom
         val layerW = Math.round(w * quality.scale(density))
         val layerH = Math.round(h * quality.scale(density))
         val palette = Palettes.PHOSPHOR.colors
@@ -97,7 +101,7 @@ class FrameDumpTest {
             fades = { fades.add(it) },
         )
         recorder.slotOf = slots
-        val sim = RainSim(wDp, hDp, slots.size, Rng(20261023))
+        val sim = RainSim(wDp / zoom, hDp / zoom, slots.size, Rng(20261023))
         sim.prewarm(recorder)
         val prewarm = buf.copyOf(n)
         // Then two seconds at 30 frames a second: each frame's fades (drawn first, as in a step), then its records.
@@ -133,41 +137,58 @@ class FrameDumpTest {
 
     @Test
     fun `neural net as the phone draws it`() {
+        dumpNeural(1f, "neural.json")
+        // Zoomed in (150%): fewer nodes, each larger.
+        dumpNeural(1.5f, "neural-zoom.json")
+    }
+
+    /** The neural net at [zoom], to [name]. */
+    private fun dumpNeural(zoom: Float, name: String) {
         val palette = Palettes.BLOOD.colors
         val glow = NeuralParams.GLOW.getValue(GlowLevel.HIGH)
-        val sim = NeuralSim(wDp, hDp, Rng(20261023))
+        val px = density * zoom
+        val pxLow = density * Quality.LOW.scale(density) * zoom
+        val sim = NeuralSim(wDp / zoom, hDp / zoom, Rng(20261023), zoom)
         // Twelve seconds in: signals running, nodes lit.
         repeat(12 * 30) { sim.advance(1f / 30f) }
         val nodes = FloatArray(NeuralFrame.MAX_NODES * 2)
         val sparks = FloatArray(NeuralFrame.MAX_SPARKS * 4)
         val bokeh = FloatArray(NeuralFrame.MAX_BOKEH * 4)
         val pairs = NeuralFrame.nodes(sim, nodes)
-        val ns = NeuralFrame.sparks(sim, glow.haloSize, density, sparks)
+        val ns = NeuralFrame.sparks(sim, glow.haloSize, px, sparks)
         // At LOW the sprites are sized for its px per dp (a whole number of its px).
         val sparksLow = FloatArray(NeuralFrame.MAX_SPARKS * 4)
-        NeuralFrame.sparks(sim, glow.haloSize, density * Quality.LOW.scale(density), sparksLow)
+        NeuralFrame.sparks(sim, glow.haloSize, pxLow, sparksLow)
         val nb = NeuralFrame.bokeh(sim, bokeh)
         val links = FloatArray(sim.links.size / 2 * 3) { i -> if (i % 3 == 2) sim.weight[i / 3] else sim.links[2 * (i / 3) + i % 3].toFloat() }
         val json = Json()
-            .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(sim.w, sim.h))
+            .ints("screen", intArrayOf(w, h)).num("density", px).floats("dp", floatArrayOf(sim.w, sim.h))
             .num("lowScale", Quality.LOW.scale(density))
             .raw("colors", colors(palette)).num("coolLifted", mixRgb(palette.cool, 0xffffff, 0.4f))
             .raw("glow", Json().num("halo", glow.halo).num("haloSize", glow.haloSize).num("lineGlow", glow.lineGlow).done())
             .num("lineWidth", NeuralParams.LINE_WIDTH).num("glowWidth", NeuralFrame.GLOW_WIDTH).num("maxLink", sim.maxLink)
-            .num("edge", 1f / NeuralFrame.spriteScale(glow.haloSize, density))
-            .num("edgeLow", 1f / NeuralFrame.spriteScale(glow.haloSize, density * Quality.LOW.scale(density)))
+            .num("edge", 1f / NeuralFrame.spriteScale(glow.haloSize, px))
+            .num("edgeLow", 1f / NeuralFrame.spriteScale(glow.haloSize, pxLow))
             .floats("links", links).floats("nodes", nodes, pairs * 4).floats("bokeh", bokeh, nb * 4).floats("sparks", sparks, ns * 4).floats("sparksLow", sparksLow, ns * 4)
             .done()
-        File(out, "neural.json").writeText(json)
+        File(out, name).writeText(json)
         assertTrue(ns > 0)
     }
 
     @Test
     fun `velocity as the phone draws it`() {
+        dumpVelocity(1f, "velocity.json")
+        // Zoomed in (150%): wider panels, longer streaks, a larger flare.
+        dumpVelocity(1.5f, "velocity-zoom.json")
+    }
+
+    /** VELOCITY at [zoom], to [name]. */
+    private fun dumpVelocity(zoom: Float, name: String) {
         val palette = Palettes.BLOOD.colors
         val g = VelocityParams.GLOW.getValue(GlowLevel.HIGH)
+        val px = density * zoom
         val rng = Rng(20261023)
-        val sim = VelocitySim(wDp, hDp, rng)
+        val sim = VelocitySim(wDp / zoom, hDp / zoom, rng, zoom)
         val tile = VelocityFrame.striationTile(rng)
         // Eight seconds in: streaks in flight.
         repeat(8 * 30) { sim.advance(1f / 30f) }
@@ -179,12 +200,12 @@ class FrameDumpTest {
         val np = VelocityFrame.panels(sim, g, panels)
         val nl = VelocityFrame.lines(sim, g, lines)
         val ns = VelocityFrame.streaks(sim, streaks, looks)
-        VelocityFrame.arcBox(sim, density, box)
+        VelocityFrame.arcBox(sim, px, box)
         val boxLow = FloatArray(4)
-        VelocityFrame.arcBox(sim, density * Quality.LOW.scale(density), boxLow)
+        VelocityFrame.arcBox(sim, density * Quality.LOW.scale(density) * zoom, boxLow)
         val tones = velocityTones(palette)
         val json = Json()
-            .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(sim.w, sim.h))
+            .ints("screen", intArrayOf(w, h)).num("density", px).floats("dp", floatArrayOf(sim.w, sim.h))
             .num("lowScale", Quality.LOW.scale(density))
             .raw("colors", colors(palette))
             .raw("tones", Json().num("pale", tones.pale).num("red", tones.red).num("flare", tones.flare).done())
@@ -195,17 +216,25 @@ class FrameDumpTest {
             .floats("span", floatArrayOf(VelocityParams.ARC_FROM, VelocityParams.ARC_TO)).num("arcHalf", VelocityParams.ARC_WIDTH / 2f)
             .num("arcAlpha", VelocityParams.ARC_ALPHA).num("strength", VelocityFrame.flareStrength(sim, g)).floats("arcBox", box).floats("arcBoxLow", boxLow)
             .done()
-        File(out, "velocity.json").writeText(json)
+        File(out, name).writeText(json)
         assertTrue(np == 4)
     }
 
     @Test
     fun `data flow as the phone draws it`() {
+        dumpFlow(1f, "flow.json")
+        // Zoomed in (150%), and out (50%: the most board there is to draw).
+        dumpFlow(1.5f, "flow-zoom.json")
+        dumpFlow(0.5f, "flow-zoom-out.json")
+    }
+
+    /** DATA FLOW at [zoom], to [name]. */
+    private fun dumpFlow(zoom: Float, name: String) {
         val palette = Palettes.ICE.colors
         val tones = flowTones(palette)
         // One random source for the board and then its motion, as the renderer has.
         val rng = Rng(20261023)
-        val board = FlowBoard.build(wDp, hDp, rng)
+        val board = FlowBoard.build(wDp / zoom, hDp / zoom, rng)
         val sim = FlowSim(board, rng)
         // Six seconds in: packets running, a volley or two, vias flashing. Then on until a chip is taking data in,
         // so every kind of light is drawn.
@@ -225,7 +254,7 @@ class FrameDumpTest {
         val high = FlowParams.glow(GlowLevel.HIGH, Quality.HIGH.linkGlow)
         val low = FlowParams.glow(GlowLevel.HIGH, Quality.LOW.linkGlow)
         val json = Json()
-            .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(board.w, board.h))
+            .ints("screen", intArrayOf(w, h)).num("density", density * zoom).floats("dp", floatArrayOf(board.w, board.h))
             .num("lowScale", Quality.LOW.scale(density))
             .raw("colors", colors(palette))
             .raw(
@@ -240,7 +269,7 @@ class FrameDumpTest {
             .raw("light", light(high)).raw("lightLow", light(low))
             .num("traces", board.traces.size).num("pulses", sim.pulses).num("flashes", sim.flashes)
             .done()
-        File(out, "flow.json").writeText(json)
+        File(out, name).writeText(json)
         assertTrue(sim.pulses > 0 && sim.chipGlow.max() >= 0.3f)
     }
 }

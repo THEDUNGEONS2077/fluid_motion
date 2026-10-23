@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.5.0 (build 6)
-A fourth wallpaper: DATA FLOW.
+A fourth wallpaper, DATA FLOW, and ZOOM for every wallpaper.
 
 **DATA FLOW:**
 - **What it shows.** A circuit board at work. Chips with their pins; traces running out in buses, bending at 45° like a printed board's, ending in vias and pads; packets of light racing along them, white-hot at the head with a fading tail.
@@ -13,6 +13,12 @@ A fourth wallpaper: DATA FLOW.
 - **Packets.** 3.2 a second per screen. Counted per area, as on the web, a phone would get one every second or so and look idle.
 - **Drawing.** The board is drawn again each frame from small shapes sent to the GPU once (about 150 on a phone), with no full-screen layer kept in memory. Per frame, only the light changes: a few kilobytes.
 - **QUALITY LOW** also leaves out the soft glow round the traces and the halos round the packets. AUTO CALIBRATE measures LOW on its own for DATA FLOW, as it does for NEURAL NET.
+
+**ZOOM, for every wallpaper** (under GLOW: **−** · 100% · **+** · RESET, or pinch the wallpaper in the app):
+- **Each wallpaper keeps its own zoom.** It's the zoom that wallpaper is shown at on your home screen from then on: its default. A pinch is kept when your fingers lift.
+- **From 50% to 200%,** in the same steps as the dashboard. Zoomed in, the glyphs, nodes, traces and chips are larger and fewer. VELOCITY grows its panels, streaks and flare, and the flare stays in its corner. Below 100%, there's more of everything, smaller.
+- **As sharp at every zoom:** the wallpaper is drawn at the resolution QUALITY sets for your screen, not scaled up. The rain's glyphs stop growing in sharpness at 6 px per dp, which covers 200% on your S25 at its default resolution, so its glyph sheet never outgrows a phone's graphics memory.
+- **Cost:** zooming in costs the same or less. Zooming out costs more, mostly on MATRIX RAIN (more glyphs to draw). AUTO CALIBRATE measures each wallpaper at its own zoom.
 
 **All wallpapers: no more garbage per frame.**
 - Every wallpaper made a little garbage each frame: MATRIX RAIN about 85 bytes, VELOCITY 23, NEURAL NET 7. Drawing a random number from a range made a new object every time, and the rain also made one walking its layers. The phone's memory cleaner would sweep this up every so often, waking up while the wallpaper should be idle.

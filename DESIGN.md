@@ -22,6 +22,14 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 
 **Glow levels** are the web's (LOW, MEDIUM, HIGH, MAX), each wallpaper reading them its own way. **Palettes** are the web's six. Each wallpaper starts in its reference's palette: the rain in PHOSPHOR, NEURAL NET and VELOCITY in BLOOD. DATA FLOW, with no reference, starts in ICE (cyan traces, violet ones and a violet glow).
 
+**Zoom is the web's** (user request, 2026-10-23: zoom in, and set any wallpaper's default zoom). Its steps are Chrome's, from 50% to 200%, and each wallpaper keeps its own.
+- **What a zoom does.** A wallpaper at zoom z is laid out for a screen 1/z as big and drawn z times as large: larger glyphs, nodes, traces and chips, and fewer of them.
+- **Sharpness.** It's drawn at the resolution QUALITY sets for the screen, so it's as sharp at any zoom.
+- **Counts.** NEURAL NET's counts are per screen at 100%, so they scale with the area that shows (1/z²), within the shaders' arrays (12 to 128 nodes).
+- **VELOCITY** is laid out in shares of the screen, so it grows its panels, streaks and flare instead. The flare stays in its corner and the panels keep their slant.
+- **The rain's glyphs** are drawn at 6 px per dp at most. That covers the S25 Ultra's 200% at FHD+. Past it, the trail layer is drawn smaller and scaled up, so the glyph atlas never grows past what a GPU allows (and 40-odd MB).
+- **Where.** The app sets it with − / + or a pinch on the preview, a step at a time. A pinch is saved when the fingers lift.
+
 **Motion is the web's.** It runs at the power profile's rate instead of every screen refresh. The motion is slow, so 30 fps reads the same as 120 at a quarter of the work.
 
 ## The app
@@ -30,6 +38,7 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
   - WALLPAPER: picture tiles, one marked ● ON HOME when it's the home screen's. The names may wrap to a second line, so four tiles fit a phone's width with every name whole.
   - COLOURS: that wallpaper's palette, as swatches in each palette's own colours.
   - GLOW.
+  - ZOOM: that wallpaper's zoom, − value + RESET (each button named for TalkBack, the value read out as it changes); or pinch the preview.
   - POWER: ECO, BALANCED, SMOOTH; STILL IN BATTERY SAVER; COOL DOWN WHEN HOT.
   - APP COLOURS: the screen's own palette.
   - STATUS: the rate, the cost of a frame, GPU priority and the version.

@@ -61,6 +61,15 @@ The objective is no hit to battery or performance. How it's met:
 - **System colours.** `onComputeColors` gives the system the palette's colours, so it never screenshots the wallpaper to work them out.
 - **Opaque surfaces.** The wallpaper window and the app's preview are RGBX, so the compositor never blends them.
 
+## ZOOM
+- **The rule.** `lib/Zoom.kt` holds the steps, the web's: Chrome's levels from 50% to 200%. Each wallpaper's zoom is kept in Settings as `zoom.<id>` (nothing is stored at 100%). It travels with the look, `RenderLoop.setLook(…, zoom)` → `Scene.setZoom`, and is applied at the scene's next frame with the context current, like QUALITY.
+- **How a scene zooms.** It is laid out at `density × zoom`: its simulation gets a screen 1/zoom as big in dp, and it draws at `pxPerDp = density × QUALITY scale × zoom`. The target stays at QUALITY's resolution for the screen, so zoomed in the picture is as sharp; zoomed out there's more to draw.
+- **Exceptions:**
+  - NEURAL NET's counts are per screen, so they scale by 1/zoom² (`NeuralSim`, clamped to the shaders' arrays).
+  - VELOCITY's sizes are shares of a base length, so its base grows by the zoom while the flare keeps its corner inset (`VelocitySim`).
+  - The rain's glyph atlas grows as zoom²: its glyphs are capped at `RainParams.MAX_ATLAS_PX_PER_DP` (6), and lower still if the GPU's `GL_MAX_TEXTURE_SIZE` needs it, judged at MAX glow. Past that, its trail layer is drawn smaller and scaled up.
+- **The app.** HomeScreen's ZOOM stepper, and a pinch on the preview (`pinchToZoom`, a step at a time through `HomeState.previewZoom`, kept on lift). AUTO CALIBRATE measures each wallpaper at its own zoom.
+
 ## QUALITY and AUTO
 - **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass, and DATA FLOW's soft glow round its traces and halos round its packets (`FlowParams.glow`).
   - Below the screen's resolution, NEURAL NET, VELOCITY and DATA FLOW draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
@@ -92,7 +101,9 @@ The objective is no hit to battery or performance. How it's met:
   - VELOCITY's geometry on 16:9 and on a phone;
   - DATA FLOW's board: runs at 45°, no trace crossing or touching another, chip traces from their pins, the screen covered; its pools and arrays never overrun;
   - **FlowBoardGoldenTest:** given the same random numbers, the board is the web's, chip for chip and trace for trace. 80 boards were compared in full against board.ts under Node when the port was made; a few are kept as checksums;
-  - **FrameAllocationTest:** a frame of each wallpaper allocates nothing.
+  - **FrameAllocationTest:** a frame of each wallpaper allocates nothing;
+  - **ZoomTest:** the steps, and what a zoom does to the neural net's counts and VELOCITY's sizes.
+- **Zoomed frames.** FrameDumpTest also dumps each scene at 150% (and DATA FLOW at 50%), which shader-check draws as `*-zoom.png`.
 - **ShaderUniformsTest.** Every uniform a renderer sets is declared by its shaders, and every declared uniform is set.
 - **FrameDumpTest.** It writes what each scene sends the GPU on an S25 Ultra (1080 × 2340 at 2.8125 px per dp) to `app/build/shader-check/`.
 - **tools/shader-check.**

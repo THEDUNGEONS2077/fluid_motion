@@ -57,10 +57,10 @@ abstract class FluidWallpaperService : WallpaperService() {
             PowerWatch.add(this@FluidWallpaperService, onPower)
         }
 
-        /** The wallpaper's palette and glow, from the settings (and new colours for the system, if they changed). */
+        /** The wallpaper's palette, glow, quality and zoom, from the settings (and new colours for the system, if they changed). */
         private fun applyLook() {
             val p = settings.palette(kind)
-            loop.setLook(p.colors, settings.glow(kind), settings.quality(kind))
+            loop.setLook(p.colors, settings.glow(kind), settings.quality(kind), settings.zoom(kind))
             if (palette.isNotEmpty() && palette != p.id) notifyColorsChanged()
             palette = p.id
         }

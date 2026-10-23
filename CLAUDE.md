@@ -16,6 +16,7 @@ An Android app (`com.thedungeons2077.fluidmotion`) with four **live wallpapers**
 - **Nothing allocates per frame** in `render` or `scene`, and nothing runs while a wallpaper is off screen. No loops in the UI either: an idle app screen draws nothing.
   - `FrameAllocationTest` weighs each wallpaper's frame; a new wallpaper gets a case there.
   - Draw random ranges from a `Span`, never a Kotlin float range (`a..b` boxes its ends at every read). In per-frame code, loop over Lists by index (a `for` over a List makes an iterator).
+- **ZOOM** (lib/Zoom.kt, the web's steps) reaches every scene through `Scene.setZoom`. A scene lays itself out at `density × zoom` and draws at `pxPerDp × zoom`, and its target follows QUALITY at the screen's own density. A new wallpaper must zoom too, and get a zoomed dump in FrameDumpTest.
 - **DATA FLOW's board is the web's, rule for rule** (`lib/flow/FlowBoard.kt` and board.ts, in the same order of random draws). Change a board rule on both sides, then regenerate `FlowBoardGoldenTest` (its header says how).
 - **Shaders** are GLSL ES 3.00 files in `app/src/main/assets/shaders`, with `#include name` for `name.glsl`.
   - **Precision.** A uniform used in both stages must have the same precision in both. Positions in fragment shaders are `highp`, because mediump is 16-bit on phones.

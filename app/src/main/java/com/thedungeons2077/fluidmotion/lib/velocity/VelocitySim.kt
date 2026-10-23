@@ -97,16 +97,24 @@ fun velocityTones(c: PaletteColors): VelocityTones {
     return VelocityTones(pale, c.accent, flare)
 }
 
-/** VELOCITY on a [w] × [h] dp screen. */
-class VelocitySim(val w: Float, val h: Float, private val rng: Rng) {
-    /** The base length the shares are of (dp). */
-    val base = maxOf(w, h) * 0.75f
+/**
+ * VELOCITY on a [w] × [h] dp screen, at [zoom] (lib/Zoom.kt): laid out in
+ * shares of the screen, so zoomed it isn't laid out smaller but grown: its
+ * panels, streaks and flare are shares of a zoomed base length; the flare
+ * stays in its corner, and the panels keep their slant.
+ */
+class VelocitySim(val w: Float, val h: Float, private val rng: Rng, zoom: Float = 1f) {
+    /** The screen's base length (dp): ¾ of its longer side; the flare is placed in it. */
+    private val layoutBase = maxOf(w, h) * 0.75f
+
+    /** The base length the sizes and speeds are shares of (dp): the screen's, zoomed. */
+    val base = layoutBase * zoom
     /** The length leans are shares of (dp): a 16:9 screen's width at this height. */
     private val slant = h * VelocityParams.REF_ASPECT
 
     /** The corner flare (dp): the bloom's centre and radius, its arc's centre and radius. */
-    val flareX = w - VelocityParams.FLARE_INSET_X * base
-    val flareY = h - VelocityParams.FLARE_INSET_Y * base
+    val flareX = w - VelocityParams.FLARE_INSET_X * layoutBase
+    val flareY = h - VelocityParams.FLARE_INSET_Y * layoutBase
     val flareR = VelocityParams.FLARE_RADIUS * base
     val arcX = flareX + VelocityParams.ARC_DX * base
     val arcY = flareY + VelocityParams.ARC_DY * base
