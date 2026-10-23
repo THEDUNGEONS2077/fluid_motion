@@ -19,7 +19,8 @@ import kotlin.math.roundToInt
  * A detail level. Names are stored in settings: never rename one.
  * [maxPxPerDp] caps the drawing's resolution (the S25 Ultra's screen is
  * 2.8 px per dp at its default FHD+, 3.75 at WQHD+); [linkGlow] keeps
- * NEURAL NET's soft second stroke on its links (its widest pass).
+ * NEURAL NET's soft second stroke on its links (its widest pass) and DATA
+ * FLOW's soft glow round its traces and halos round its packets.
  */
 enum class Quality(val label: String, val maxPxPerDp: Float, val linkGlow: Boolean) {
     LOW("LOW", 1.5f, false),

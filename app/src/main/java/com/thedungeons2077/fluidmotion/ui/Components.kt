@@ -64,7 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.thedungeons2077.fluidmotion.lib.Palette
 import kotlinx.coroutines.launch
 
-/** Text in the deck's family, optionally glowing. */
+/** Text in the deck's family, optionally glowing; [minLines] keeps room for that many lines (so neighbours line up). */
 @Composable
 fun DeckText(
     text: String,
@@ -74,12 +74,14 @@ fun DeckText(
     glow: Shadow? = null,
     align: TextAlign = TextAlign.Start,
     maxLines: Int = Int.MAX_VALUE,
+    minLines: Int = 1,
 ) {
     BasicText(
         text = text,
         modifier = modifier,
         style = style.copy(color = color, shadow = glow, textAlign = align),
         maxLines = maxLines,
+        minLines = minLines,
         overflow = TextOverflow.Ellipsis,
     )
 }
@@ -228,7 +230,12 @@ private fun Swatch(p: Palette, on: Boolean, onClick: () -> Unit, what: String, m
     }
 }
 
-/** The three wallpapers as picture tiles: the lit one is the one shown and set; [active] marks the one on the home screen. */
+/**
+ * The wallpapers as picture tiles in a row: the lit one is the one shown
+ * and set; [active] marks the one on the home screen. Names may wrap to a
+ * second line (four to a phone's width leaves "MATRIX RAIN" no room on
+ * one), and every name keeps room for two, so the tiles line up.
+ */
 @Composable
 fun <T> Tiles(items: List<T>, selected: T, active: T?, label: (T) -> String, picture: (T) -> Int, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     val d = LocalDeck.current
@@ -251,7 +258,7 @@ fun <T> Tiles(items: List<T>, selected: T, active: T?, label: (T) -> String, pic
                         .aspectRatio(0.75f)
                         .border(DeckSize.hairline, if (on) d.accent else d.line, shape),
                 )
-                DeckText(label(item), DeckType.small, if (on) d.textBright else d.textDim, glow = if (on) d.glowText else null, maxLines = 1)
+                DeckText(label(item), DeckType.small, if (on) d.textBright else d.textDim, glow = if (on) d.glowText else null, maxLines = 2, minLines = 2)
                 DeckText(if (item == active) "● ON HOME" else " ", DeckType.small, d.accent, maxLines = 1)
             }
         }

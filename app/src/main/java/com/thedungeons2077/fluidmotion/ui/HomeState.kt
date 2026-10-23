@@ -45,6 +45,7 @@ import com.thedungeons2077.fluidmotion.render.UsageStore
 import com.thedungeons2077.fluidmotion.scene.SceneKind
 import com.thedungeons2077.fluidmotion.settings.Calibrated
 import com.thedungeons2077.fluidmotion.settings.Settings
+import com.thedungeons2077.fluidmotion.wallpaper.DataFlowService
 import com.thedungeons2077.fluidmotion.wallpaper.MatrixRainService
 import com.thedungeons2077.fluidmotion.wallpaper.NeuralNetService
 import com.thedungeons2077.fluidmotion.wallpaper.VelocityService
@@ -227,7 +228,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         val density = context.resources.displayMetrics.density
         // The steps: per wallpaper, the qualities grouped by what they draw here (each group drawn once).
         val plan = SceneKind.entries.flatMap { kind ->
-            Quality.entries.groupBy { Calibration.key(it, density, usesLinkGlow = kind == SceneKind.NEURAL) }.values.map { kind to it }
+            Quality.entries.groupBy { Calibration.key(it, density, kind.usesLinkGlow) }.values.map { kind to it }
         }
         val rate = profileFps(Calibration.PROFILE, powerState.refreshRates)
         runJob = scope.launch {
@@ -477,5 +478,6 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         SceneKind.RAIN -> MatrixRainService::class.java
         SceneKind.NEURAL -> NeuralNetService::class.java
         SceneKind.VELOCITY -> VelocityService::class.java
+        SceneKind.DATA_FLOW -> DataFlowService::class.java
     }
 }

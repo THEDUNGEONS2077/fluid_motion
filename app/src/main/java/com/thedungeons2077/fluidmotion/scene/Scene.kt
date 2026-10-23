@@ -13,6 +13,7 @@ import android.content.Context
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Quality
+import com.thedungeons2077.fluidmotion.scene.flow.FlowRenderer
 import com.thedungeons2077.fluidmotion.scene.neural.NeuralRenderer
 import com.thedungeons2077.fluidmotion.scene.rain.RainRenderer
 import com.thedungeons2077.fluidmotion.scene.velocity.VelocityRenderer
@@ -44,19 +45,24 @@ interface Scene {
 
 /**
  * The wallpapers: ids (stored in settings: never rename one), names as the
- * dashboard shows them, the palette each starts in (its reference's), and
+ * dashboard shows them, the palette each starts in (its reference's; DATA
+ * FLOW, with no reference, in ICE: cyan and violet), whether QUALITY's
+ * [Quality.linkGlow] changes what it draws (NEURAL NET's link glow, DATA
+ * FLOW's soft glows and halos: AUTO CALIBRATE then measures LOW apart), and
  * how to make its scene.
  */
-enum class SceneKind(val id: String, val label: String, val defaultPalette: String) {
-    RAIN("matrix-rain", "MATRIX RAIN", "phosphor"),
-    NEURAL("neural-net", "NEURAL NET", "blood"),
-    VELOCITY("velocity", "VELOCITY", "blood");
+enum class SceneKind(val id: String, val label: String, val defaultPalette: String, val usesLinkGlow: Boolean) {
+    RAIN("matrix-rain", "MATRIX RAIN", "phosphor", false),
+    NEURAL("neural-net", "NEURAL NET", "blood", true),
+    VELOCITY("velocity", "VELOCITY", "blood", false),
+    DATA_FLOW("data-flow", "DATA FLOW", "ice", true);
 
     /** A new scene of this kind. */
     fun create(context: Context): Scene = when (this) {
         RAIN -> RainRenderer(context)
         NEURAL -> NeuralRenderer(context)
         VELOCITY -> VelocityRenderer(context)
+        DATA_FLOW -> FlowRenderer(context)
     }
 
     companion object {

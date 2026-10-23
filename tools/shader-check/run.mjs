@@ -42,7 +42,7 @@ const shaders = Object.fromEntries(
     .filter((n) => /\.(vert|frag)$/.test(n))
     .map((n) => [n, source(n)]),
 );
-const SCENES = ['rain', 'rain-low', 'neural', 'velocity'];
+const SCENES = ['rain', 'rain-low', 'neural', 'velocity', 'flow'];
 for (const scene of SCENES) {
   if (!existsSync(join(dumpDir, `${scene}.json`))) {
     console.error(`no ${scene}.json in ${dumpDir}: run ./gradlew :app:testDebugUnitTest first`);

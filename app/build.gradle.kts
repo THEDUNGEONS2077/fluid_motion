@@ -28,8 +28,8 @@ android {
         // wallpaper telling the system its colours itself, which needs 8.1).
         minSdk = 27
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.4.0"
+        versionCode = 6
+        versionName = "0.5.0"
     }
 
     signingConfigs {
@@ -70,6 +70,9 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // FrameAllocationTest weighs what a frame allocates: without escape analysis the desktop JIT can't
+        // quietly remove an allocation the phone's compiler might still make.
+        unitTests.all { it.jvmArgs("-XX:-DoEscapeAnalysis") }
     }
 }
 

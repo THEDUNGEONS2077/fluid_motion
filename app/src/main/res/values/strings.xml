@@ -9,4 +9,6 @@
     <string name="neural_description">A drifting plexus of glowing nodes; signals run along its links.</string>
     <string name="velocity_label">VELOCITY</string>
     <string name="velocity_description">Light caught in motion: slanted panels drifting, streaks racing past.</string>
+    <string name="flow_label">DATA FLOW</string>
+    <string name="flow_description">A circuit board at work: packets of light racing along its traces, flashing at vias, lighting up its chips.</string>
 </resources>

@@ -3,7 +3,7 @@
  * (an S25 Ultra at its default FHD+: 1080 × 2340 px, 2.8125 px per dp), to
  * app/build/shader-check/ (a JSON file per scene), for tools/shader-check to draw with the
  * real shader files in WebGL2. The numbers come from the same lib code the
- * renderers use (RainRecorder, NeuralFrame, VelocityFrame), so the pictures
+ * renderers use (RainRecorder, NeuralFrame, VelocityFrame, FlowFrame), so the pictures
  * show what the phone will draw.
  *
  * Not a check by itself (it asserts only that it wrote something): the
@@ -16,6 +16,11 @@ import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Palettes
 import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.desaturate
+import com.thedungeons2077.fluidmotion.lib.flow.FlowBoard
+import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
+import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
+import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
+import com.thedungeons2077.fluidmotion.lib.flow.flowTones
 import com.thedungeons2077.fluidmotion.lib.mixRgb
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralFrame
 import com.thedungeons2077.fluidmotion.lib.neural.NeuralParams
@@ -192,5 +197,50 @@ class FrameDumpTest {
             .done()
         File(out, "velocity.json").writeText(json)
         assertTrue(np == 4)
+    }
+
+    @Test
+    fun `data flow as the phone draws it`() {
+        val palette = Palettes.ICE.colors
+        val tones = flowTones(palette)
+        // One random source for the board and then its motion, as the renderer has.
+        val rng = Rng(20261023)
+        val board = FlowBoard.build(wDp, hDp, rng)
+        val sim = FlowSim(board, rng)
+        // Six seconds in: packets running, a volley or two, vias flashing. Then on until a chip is taking data in,
+        // so every kind of light is drawn.
+        repeat(6 * 30) { sim.advance(1f / 30f) }
+        var more = 0
+        while (sim.chipGlow.max() < 0.3f && more++ < 30 * 30) sim.advance(1f / 30f)
+        /** The light at a glow, as FlowFrame.light packs it: its arrays, cut to their counts. */
+        fun light(glow: com.thedungeons2077.fluidmotion.lib.flow.FlowGlow): String {
+            val segs = FloatArray(FlowFrame.lightSegCapacity(board) * FlowFrame.SEG)
+            val marks = FloatArray((FlowParams.MAX_PULSES + FlowParams.MAX_FLASHES) * FlowFrame.MARK)
+            val chips = FloatArray(board.chips.size * FlowFrame.CHIP)
+            val counts = IntArray(3)
+            FlowFrame.light(sim, tones, glow, segs, marks, chips, counts, FloatArray(2))
+            return Json().floats("segs", segs, counts[0] * FlowFrame.SEG).floats("marks", marks, counts[1] * FlowFrame.MARK)
+                .floats("chips", chips, counts[2] * FlowFrame.CHIP).done()
+        }
+        val high = FlowParams.glow(GlowLevel.HIGH, Quality.HIGH.linkGlow)
+        val low = FlowParams.glow(GlowLevel.HIGH, Quality.LOW.linkGlow)
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("density", density).floats("dp", floatArrayOf(board.w, board.h))
+            .num("lowScale", Quality.LOW.scale(density))
+            .raw("colors", colors(palette))
+            .raw(
+                "tones",
+                Json().num("dot", tones.dot).num("warmVia", tones.warmVia).num("coolVia", tones.coolVia)
+                    .num("warmLight", tones.warmLight).num("coolLight", tones.coolLight).num("warmHead", tones.warmHead).num("coolHead", tones.coolHead)
+                    .num("chipBody", tones.chipBody).num("chipEdge", tones.chipEdge).num("die", tones.die).done(),
+            )
+            .num("pitch", FlowParams.PITCH).floats("main", floatArrayOf(board.mainX, board.mainY)).num("far", FlowFrame.far(board))
+            .floats("boardSegs", FlowFrame.boardSegs(board, tones, high)).floats("boardSegsLow", FlowFrame.boardSegs(board, tones, low))
+            .floats("boardMarks", FlowFrame.boardMarks(board)).floats("boardChips", FlowFrame.boardChips(board))
+            .raw("light", light(high)).raw("lightLow", light(low))
+            .num("traces", board.traces.size).num("pulses", sim.pulses).num("flashes", sim.flashes)
+            .done()
+        File(out, "flow.json").writeText(json)
+        assertTrue(sim.pulses > 0 && sim.chipGlow.max() >= 0.3f)
     }
 }

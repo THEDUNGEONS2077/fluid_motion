@@ -3,7 +3,7 @@
 Read [ARCHITECTURE.md](ARCHITECTURE.md) (layers, the render loop, the battery rules) and [DESIGN.md](DESIGN.md) (each wallpaper's look, the app's look) first.
 
 ## What this is
-An Android app (`com.thedungeons2077.fluidmotion`) with three **live wallpapers** ported from cyberdeck_terminal (`~/projects/cyberdeck_terminal`, its `src/wallpaper/`): MATRIX RAIN, NEURAL NET and VELOCITY. The app is their preview and settings, in cyberdeck_terminal's design. It's optimized first for the user's Samsung S25 Ultra, and works on any Android 8.1+ phone with OpenGL ES 3.
+An Android app (`com.thedungeons2077.fluidmotion`) with four **live wallpapers** ported from cyberdeck_terminal (`~/projects/cyberdeck_terminal`, its `src/wallpaper/`): MATRIX RAIN, NEURAL NET, VELOCITY and DATA FLOW. The app is their preview and settings, in cyberdeck_terminal's design. It's optimized first for the user's Samsung S25 Ultra, and works on any Android 8.1+ phone with OpenGL ES 3.
 
 **The key objective (user, 2026-10-23): no hit to battery life or phone performance.** Every change is judged by that first. See ARCHITECTURE.md § Battery.
 
@@ -12,8 +12,11 @@ An Android app (`com.thedungeons2077.fluidmotion`) with three **live wallpapers*
 - **Layers** (ARCHITECTURE.md):
   - `lib` is pure Kotlin with no Android or GL, and is unit tested.
   - `gl` and `scene` draw. `render` drives the drawing. `wallpaper` and `ui` are the Android entry points.
-  - Per-frame data packing lives in `lib` (`RainRecords`, `NeuralFrame`, `VelocityFrame`), so the JVM frame dump and the renderers share it.
+  - Per-frame data packing lives in `lib` (`RainRecords`, `NeuralFrame`, `VelocityFrame`, `FlowFrame`), so the JVM frame dump and the renderers share it.
 - **Nothing allocates per frame** in `render` or `scene`, and nothing runs while a wallpaper is off screen. No loops in the UI either: an idle app screen draws nothing.
+  - `FrameAllocationTest` weighs each wallpaper's frame; a new wallpaper gets a case there.
+  - Draw random ranges from a `Span`, never a Kotlin float range (`a..b` boxes its ends at every read). In per-frame code, loop over Lists by index (a `for` over a List makes an iterator).
+- **DATA FLOW's board is the web's, rule for rule** (`lib/flow/FlowBoard.kt` and board.ts, in the same order of random draws). Change a board rule on both sides, then regenerate `FlowBoardGoldenTest` (its header says how).
 - **Shaders** are GLSL ES 3.00 files in `app/src/main/assets/shaders`, with `#include name` for `name.glsl`.
   - **Precision.** A uniform used in both stages must have the same precision in both. Positions in fragment shaders are `highp`, because mediump is 16-bit on phones.
   - **Required check.** After any shader or renderer change, run the shader check (Commands below).

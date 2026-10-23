@@ -132,3 +132,8 @@ class NeuralNetService : FluidWallpaperService() {
 class VelocityService : FluidWallpaperService() {
     override val kind = SceneKind.VELOCITY
 }
+
+/** DATA FLOW. */
+class DataFlowService : FluidWallpaperService() {
+    override val kind = SceneKind.DATA_FLOW
+}

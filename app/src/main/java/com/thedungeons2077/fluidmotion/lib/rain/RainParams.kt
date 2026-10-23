@@ -16,11 +16,11 @@ data class RainLayer(
     val font: Float,
     val colW: Float,
     val rowH: Float,
-    val speed: ClosedFloatingPointRange<Float>,
+    val speed: Span,
     /** Share of columns with a drop falling at any moment. */
     val occupancy: Float,
     /** Body glyph opacity range; each drop gets one value. */
-    val alpha: ClosedFloatingPointRange<Float>,
+    val alpha: Span,
     /** Chance a drop's head is drawn pale and glowing. */
     val headChance: Float,
 )
@@ -32,9 +32,9 @@ data class RainGlow(val alpha: Float, val head: Float, val headLayers: Int, val 
 object RainParams {
     /** The three layers, back to front. */
     val LAYERS = listOf(
-        RainLayer(8f, 7f, 8f, 8f..14f, 0.95f, 0.45f..0.8f, 0.15f),
-        RainLayer(10f, 10f, 10f, 10f..18f, 0.6f, 0.6f..0.95f, 0.35f),
-        RainLayer(13f, 14f, 13f, 12f..22f, 0.2f, 0.8f..1f, 0.6f),
+        RainLayer(8f, 7f, 8f, Span(8f, 14f), 0.95f, Span(0.45f, 0.8f), 0.15f),
+        RainLayer(10f, 10f, 10f, Span(10f, 18f), 0.6f, Span(0.6f, 0.95f), 0.35f),
+        RainLayer(13f, 14f, 13f, Span(12f, 22f), 0.2f, Span(0.8f, 1f), 0.6f),
     )
 
     /** How long a glyph takes to fade to about 2% (s). */
@@ -54,7 +54,7 @@ object RainParams {
     /** Share of a trail re-rolled a second (the flicker). */
     const val MUTATIONS_PER_SECOND = 1.2f
     /** A drop waits this long (s, range) at the top before falling again. */
-    val RESPAWN_DELAY = 0.2f..4f
+    val RESPAWN_DELAY = Span(0.2f, 4f)
     /** Seconds simulated before the first frame, so the screen opens full. */
     const val PREWARM_SECONDS = 18f
     /** The pre-warm's simulation step (s). */

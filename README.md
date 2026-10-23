@@ -1,15 +1,16 @@
 # fluid_motion
 
-Three live wallpapers for Android, from the [cyberdeck_terminal](https://thedungeons2077.github.io/cyberdeck_terminal/) dashboard:
+Four live wallpapers for Android, from the [cyberdeck_terminal](https://thedungeons2077.github.io/cyberdeck_terminal/) dashboard:
 
 - **MATRIX RAIN**: columns of glyphs falling in three depths, glowing heads, long fading trails.
 - **NEURAL NET**: a drifting plexus of glowing nodes; signals run along its links.
 - **VELOCITY**: light caught in motion; slanted panels drift, streaks race past.
+- **DATA FLOW**: a circuit board at work; packets of light race along its traces, flash at vias and light up its chips.
 
 The app is their preview and settings, in the dashboard's terminal style. It is built to cost as little battery as possible:
 
 - **Hidden:** it draws nothing at all while the wallpaper is hidden.
-- **On screen:** it draws 30 frames a second by default (ECO 20, SMOOTH 60) and tells the display, so a phone like the S25 Ultra can slow its refresh too.
+- **On screen:** it draws 30 frames a second by default (ECO 24 on the S25 Ultra, 20 where the display has no slow rate; SMOOTH 60) and tells the display, so a phone like the S25 Ultra can slow its refresh too.
 - **Battery saver:** it holds a still frame.
 - **Heat:** it slows down when the phone is warm, and holds a still frame when it's hot.
 - **Priority:** the app in front always gets the processor and the GPU first.

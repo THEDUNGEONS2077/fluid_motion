@@ -1,5 +1,5 @@
 /**
- * tools/shader-check/render.js: runs in the page. Draws the three scenes
+ * tools/shader-check/render.js: runs in the page. Draws the four scenes
  * the way their Kotlin renderers do (app/.../scene/<scene>/…Renderer.kt),
  * call for call, with the real shaders and the frames the JVM dump wrote.
  * Keep the two in step: a renderer change belongs here too.
@@ -476,6 +476,110 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     snapshot(low ? 'velocity-low' : 'velocity', `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${d.panels.length / 4} panels, ${ns} streaks;`);
   }
 
+  // --- DATA FLOW (scene/flow/FlowRenderer.kt) -------------------------------------------
+  function flow(d, low = false) {
+    const target = scaledTarget(low ? d.lowScale : 1);
+    const px = d.density * (low ? d.lowScale : 1);
+    const t = d.tones;
+    const c = d.colors;
+    const bg = program('fullscreen.vert', 'flow_bg.frag');
+    const seg = program('flow_seg.vert', 'flow_seg.frag');
+    const mark = program('flow_mark.vert', 'flow_mark.frag');
+    const chip = program('flow_chip.vert', 'flow_chip.frag');
+    /** Instances of [stride] floats, attributes [sizes] floats each in order (gl/Gl.kt StaticInstances, InstanceStream). */
+    const instances = (data, stride, sizes) => {
+      const vao = gl.createVertexArray();
+      const buf = gl.createBuffer();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data.length ? data : [0]), gl.STATIC_DRAW);
+      let offset = 0;
+      sizes.forEach((size, loc) => {
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride * 4, offset * 4);
+        gl.vertexAttribDivisor(loc, 1);
+        offset += size;
+      });
+      gl.bindVertexArray(null);
+      return { vao, count: data.length / stride };
+    };
+    const draw = (inst) => {
+      if (!inst.count) return;
+      gl.bindVertexArray(inst.vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, inst.count);
+      gl.bindVertexArray(null);
+    };
+    // sendBoard (LOW: the glow without the board's soft glow or the packets' halos).
+    const boardSegs = instances(low ? d.boardSegsLow : d.boardSegs, 16, [4, 4, 4, 4]);
+    const boardMarks = instances(d.boardMarks, 6, [4, 2]);
+    const boardChips = instances(d.boardChips, 6, [4, 2]);
+    const l = low ? d.lightLow : d.light;
+    const lightSegs = instances(l.segs, 16, [4, 4, 4, 4]);
+    const lightMarks = instances(l.marks, 6, [4, 2]);
+    const lightChips = instances(l.chips, 6, [4, 2]);
+    // setUniforms.
+    bg.use();
+    set3(bg.u('uBg'), c.bg);
+    set3(bg.u('uCool'), c.cool);
+    set3(bg.u('uAccent'), c.accent);
+    set3(bg.u('uDot'), t.dot);
+    gl.uniform2f(bg.u('uScreen'), d.dp[0], d.dp[1]);
+    gl.uniform1f(bg.u('uDensity'), px);
+    gl.uniform1f(bg.u('uPitch'), d.pitch);
+    gl.uniform2f(bg.u('uMain'), d.main[0], d.main[1]);
+    gl.uniform1f(bg.u('uFar'), d.far);
+    seg.use();
+    gl.uniform2f(seg.u('uTargetPx'), target.width, target.height);
+    gl.uniform1f(seg.u('uDensity'), px);
+    mark.use();
+    gl.uniform2f(mark.u('uTargetPx'), target.width, target.height);
+    gl.uniform1f(mark.u('uDensity'), px);
+    set3(mark.u('uBg'), c.bg);
+    set3(mark.u('uWarmVia'), t.warmVia);
+    set3(mark.u('uCoolVia'), t.coolVia);
+    set3(mark.u('uWarmLight'), t.warmLight);
+    set3(mark.u('uCoolLight'), t.coolLight);
+    set3(mark.u('uWarmHead'), t.warmHead);
+    set3(mark.u('uCoolHead'), t.coolHead);
+    chip.use();
+    gl.uniform2f(chip.u('uTargetPx'), target.width, target.height);
+    gl.uniform1f(chip.u('uDensity'), px);
+    gl.uniform1f(chip.u('uPitch'), d.pitch);
+    set3(chip.u('uBody'), t.chipBody);
+    set3(chip.u('uEdge'), t.chipEdge);
+    set3(chip.u('uDie'), t.die);
+    set3(chip.u('uLight'), t.warmLight);
+    // render: 1. the board's background; 2. the board, drawn over; 3. the light, added.
+    target.begin();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    bg.use();
+    fullScreen();
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    seg.use();
+    draw(boardSegs);
+    mark.use();
+    draw(boardMarks);
+    chip.use();
+    gl.uniform1i(chip.u('uPass'), 0);
+    draw(boardChips);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.uniform1i(chip.u('uPass'), 1);
+    draw(lightChips);
+    seg.use();
+    draw(lightSegs);
+    mark.use();
+    draw(lightMarks);
+    gl.disable(gl.BLEND);
+    target.end();
+    snapshot(
+      low ? 'flow-low' : 'flow',
+      `${low ? `LOW: drawn ${target.width}×${target.height}, no soft glow or halos; ` : ''}${d.traces} traces (${boardSegs.count} stretches), ${d.pulses} packets (${lightSegs.count} lit stretches), ${d.flashes} flashes, ${lightChips.count} chips lit;`,
+    );
+  }
+
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
   const runs = [
     ['rain', () => rain(dumps.rain, 'rain')],
@@ -484,6 +588,8 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     ['neural-low', () => neural(dumps.neural, true)],
     ['velocity', () => velocity(dumps.velocity)],
     ['velocity-low', () => velocity(dumps.velocity, true)],
+    ['flow', () => flow(dumps.flow)],
+    ['flow-low', () => flow(dumps.flow, true)],
   ];
   for (const [name, fn] of runs) {
     try {

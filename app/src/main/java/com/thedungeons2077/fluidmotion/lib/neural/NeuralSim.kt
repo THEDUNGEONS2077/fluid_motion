@@ -23,6 +23,7 @@ import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.mixRgb
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
+import com.thedungeons2077.fluidmotion.lib.rain.Span
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -55,26 +56,26 @@ object NeuralParams {
     /** A node picks its links from this many times as many of its nearest neighbours. */
     const val LINK_POOL = 3
     /** A node's drift round its home: amplitude (dp) and period (s). */
-    val DRIFT = 10f..38f
-    val DRIFT_PERIOD = 26f..70f
+    val DRIFT = Span(10f, 38f)
+    val DRIFT_PERIOD = Span(26f, 70f)
     /** A node's core radius (dp). */
-    val NODE_RADIUS = 1.3f..3.6f
+    val NODE_RADIUS = Span(1.3f, 3.6f)
     /** A link's opacity: short links up to the first, the longest down to the second (then times its weight). */
     const val LINE_ALPHA_SHORT = 0.6f
     const val LINE_ALPHA_LONG = 0.16f
     /** Each link's own brightness range. */
-    val LINK_WEIGHT = 0.35f..1.6f
+    val LINK_WEIGHT = Span(0.35f, 1.6f)
     /** A link's width (dp). */
     const val LINE_WIDTH = 0.9f
     /** Bokeh on one screen, radius (dp), opacity and rising speed (dp/s). */
     const val BOKEH_PER_SCREEN = 30f
-    val BOKEH_RADIUS = 4f..24f
-    val BOKEH_ALPHA = 0.05f..0.3f
-    val BOKEH_SPEED = 2f..9f
+    val BOKEH_RADIUS = Span(4f, 24f)
+    val BOKEH_ALPHA = Span(0.05f, 0.3f)
+    val BOKEH_SPEED = Span(2f, 9f)
     /** Signals: new ones a second, speed (dp/s), links they run, and how a reached node lights (rise, fade; s). */
     const val PULSES_PER_SECOND = 1.1f
-    val PULSE_SPEED = 240f..460f
-    val PULSE_HOPS = 1f..4f
+    val PULSE_SPEED = Span(240f, 460f)
+    val PULSE_HOPS = Span(1f, 4f)
     const val FLASH_RISE = 0.12f
     const val FLASH_SECONDS = 0.8f
     /** Colours along the diagonal, in this many steps. */

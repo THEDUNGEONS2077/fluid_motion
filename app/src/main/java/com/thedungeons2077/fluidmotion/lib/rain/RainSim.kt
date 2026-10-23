@@ -76,7 +76,17 @@ class Rng(seed: Int) {
     }
 
     /** A number in [range]. */
-    fun between(range: ClosedFloatingPointRange<Float>): Float = range.start + (range.endInclusive - range.start) * next()
+    fun between(range: Span): Float = range.start + (range.endInclusive - range.start) * next()
+}
+
+/**
+ * A range of floats, its ends kept as plain floats. Kotlin's own float
+ * range (a..b) hands its ends out boxed, a new object at every read: drawn
+ * from as packets and drops set off, it made garbage every frame.
+ */
+class Span(val start: Float, val endInclusive: Float) {
+    /** Whether [v] is in it. */
+    operator fun contains(v: Float): Boolean = v >= start && v <= endInclusive
 }
 
 /** No glyph in a cell. */
@@ -199,8 +209,9 @@ class RainSim(val widthDp: Float, val heightDp: Float, val glyphCount: Int, priv
                 fadePhase = (fadePhase + 1) % FADE_PHASES
             }
         }
-        // 2 and 3, layer by layer, back to front.
-        for (l in layers) {
+        // 2 and 3, layer by layer, back to front (by index: a for over a List makes an iterator every frame).
+        for (li in layers.indices) {
+            val l = layers[li]
             for (col in 0 until l.cols) {
                 if (l.wait[col] > 0f) {
                     l.wait[col] -= dt

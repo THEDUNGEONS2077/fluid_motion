@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.0 (build 6)
+A fourth wallpaper: DATA FLOW.
+
+**DATA FLOW:**
+- **What it shows.** A circuit board at work. Chips with their pins; traces running out in buses, bending at 45° like a printed board's, ending in vias and pads; packets of light racing along them, white-hot at the head with a fading tail.
+- **What happens on it.** Each packet leaves a short afterglow on its trace. A via flashes when one arrives, and a chip lights up as data comes in. Now and then a whole bus fires at once.
+- **The same board as the dashboard's.** It's laid out by the dashboard's rules, rule for rule: given the same random numbers, the phone and the web lay out the same board (a test keeps it so).
+- **Colours.** It starts in ICE: cyan traces and violet ones, a violet glow rising from the bottom left. All six palettes and the four glow levels work as on the other wallpapers.
+
+**On a phone:**
+- **Packets.** 3.2 a second per screen. Counted per area, as on the web, a phone would get one every second or so and look idle.
+- **Drawing.** The board is drawn again each frame from small shapes sent to the GPU once (about 150 on a phone), with no full-screen layer kept in memory. Per frame, only the light changes: a few kilobytes.
+- **QUALITY LOW** also leaves out the soft glow round the traces and the halos round the packets. AUTO CALIBRATE measures LOW on its own for DATA FLOW, as it does for NEURAL NET.
+
+**All wallpapers: no more garbage per frame.**
+- Every wallpaper made a little garbage each frame: MATRIX RAIN about 85 bytes, VELOCITY 23, NEURAL NET 7. Drawing a random number from a range made a new object every time, and the rain also made one walking its layers. The phone's memory cleaner would sweep this up every so often, waking up while the wallpaper should be idle.
+- Now each frame makes none. A test weighs a thousand frames of every wallpaper.
+
+**Also:**
+- WALLPAPER's tiles: four to a row; a name too long for one line wraps to two ("MATRIX / RAIN") instead of being cut off.
+- ECO at 24 fps is still waiting for its MEASURE IMPACT run on the S25 Ultra.
+
 ## 0.4.0 (build 5)
 INSIGHT: what the wallpapers cost, day by day.
 

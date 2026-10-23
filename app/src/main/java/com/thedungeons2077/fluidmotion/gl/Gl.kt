@@ -158,6 +158,62 @@ class InstanceStream(val stride: Int, val capacity: Int) {
         count = 0
     }
 
+    /** Puts [instances] instances from [src] at once, in place of what was put (one bulk copy, no allocation). */
+    fun load(src: FloatArray, instances: Int) {
+        val n = minOf(instances, capacity)
+        data.position(0)
+        data.put(src, 0, n * stride)
+        count = n
+    }
+
+    /** Frees the GL side (context current). */
+    fun release() {
+        GLES30.glDeleteBuffers(1, intArrayOf(buffer), 0)
+        GLES30.glDeleteVertexArrays(1, intArrayOf(vao), 0)
+    }
+}
+
+/**
+ * Instances that don't change between frames (a board's traces, say),
+ * [stride] floats each from [src]: sent to the GPU once (GL_STATIC_DRAW),
+ * drawn every frame.
+ */
+class StaticInstances(val stride: Int, src: FloatArray) {
+    /** How many instances. */
+    val count = src.size / stride
+    private val buffer: Int
+    private val vao: Int
+
+    init {
+        val ids = IntArray(1)
+        GLES30.glGenBuffers(1, ids, 0)
+        buffer = ids[0]
+        GLES30.glGenVertexArrays(1, ids, 0)
+        vao = ids[0]
+        val data = ByteBuffer.allocateDirect(maxOf(4, src.size * 4)).order(ByteOrder.nativeOrder()).asFloatBuffer()
+        data.put(src).position(0)
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, buffer)
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, maxOf(4, src.size * 4), data, GLES30.GL_STATIC_DRAW)
+    }
+
+    /** Declares attribute [location] as [size] floats at float [offset] of each instance (once, after init). */
+    fun attribute(location: Int, size: Int, offset: Int) {
+        GLES30.glBindVertexArray(vao)
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, buffer)
+        GLES30.glEnableVertexAttribArray(location)
+        GLES30.glVertexAttribPointer(location, size, GLES30.GL_FLOAT, false, stride * 4, offset * 4)
+        GLES30.glVertexAttribDivisor(location, 1)
+        GLES30.glBindVertexArray(0)
+    }
+
+    /** Draws them as quads (4-vertex strips). */
+    fun drawQuads() {
+        if (count == 0) return
+        GLES30.glBindVertexArray(vao)
+        GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLE_STRIP, 0, 4, count)
+        GLES30.glBindVertexArray(0)
+    }
+
     /** Frees the GL side (context current). */
     fun release() {
         GLES30.glDeleteBuffers(1, intArrayOf(buffer), 0)

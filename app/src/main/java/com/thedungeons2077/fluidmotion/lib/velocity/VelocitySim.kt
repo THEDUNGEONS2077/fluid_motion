@@ -22,24 +22,25 @@ package com.thedungeons2077.fluidmotion.lib.velocity
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
+import com.thedungeons2077.fluidmotion.lib.rain.Span
 import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** A panel's look: width and drift speed (shares of the base length, speed a second), lean (top's offset right of its bottom, a share of the 16:9 width), brightness. */
 data class PanelKind(
-    val width: ClosedFloatingPointRange<Float>,
-    val lean: ClosedFloatingPointRange<Float>,
-    val alpha: ClosedFloatingPointRange<Float>,
-    val speed: ClosedFloatingPointRange<Float>,
+    val width: Span,
+    val lean: Span,
+    val alpha: Span,
+    val speed: Span,
 )
 
 /** VELOCITY's numbers. */
 object VelocityParams {
     /** The pale panel (one at a time, like the reference's). */
-    val PALE = PanelKind(0.2f..0.26f, 0.11f..0.16f, 0.85f..1f, 0.0035f..0.006f)
+    val PALE = PanelKind(Span(0.2f, 0.26f), Span(0.11f, 0.16f), Span(0.85f, 1f), Span(0.0035f, 0.006f))
     /** The red panels. */
-    val RED = PanelKind(0.07f..0.2f, 0f..0.05f, 0.1f..0.22f, 0.006f..0.014f)
+    val RED = PanelKind(Span(0.07f, 0.2f), Span(0f, 0.05f), Span(0.1f, 0.22f), Span(0.006f, 0.014f))
     const val RED_PANELS = 3
     /** A panel's edges fade over this share of its width. */
     const val SOFT_EDGE = 0.18f
@@ -47,14 +48,14 @@ object VelocityParams {
     const val STRIATION = 0.35f
     /** Streaks: new ones a second, speed, tail length (shares of the base), thickness (dp). */
     const val STREAKS_PER_SECOND = 4.5f
-    val STREAK_SPEED = 0.35f..1.1f
-    val STREAK_LENGTH = 0.12f..0.45f
-    val STREAK_WIDTH = 0.8f..2.2f
+    val STREAK_SPEED = Span(0.35f, 1.1f)
+    val STREAK_LENGTH = Span(0.12f, 0.45f)
+    val STREAK_WIDTH = Span(0.8f, 2.2f)
     /** Share of streaks in the pale colour (the rest red). */
     const val PALE_STREAKS = 0.2f
     /** Long faint lines across the screen, and their opacity range. */
     const val LONG_LINES = 10
-    val LONG_LINE_ALPHA = 0.05f..0.22f
+    val LONG_LINE_ALPHA = Span(0.05f, 0.22f)
     /** Streaks in flight at most (a fixed pool: a phone has about 14 at once). */
     const val MAX_STREAKS = 48
 

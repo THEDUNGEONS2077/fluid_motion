@@ -3,12 +3,12 @@
 ## Layers
 ```
 app/src/main/java/com/thedungeons2077/fluidmotion/
-  lib/        pure Kotlin: palettes, power rules, the three simulations, per-frame packing   (unit tested)
+  lib/        pure Kotlin: palettes, power rules, the four simulations, per-frame packing   (unit tested)
   gl/         EGL context (low GPU priority), shader programs, instance buffers
-  scene/      the three renderers (one Scene each) and the rain's glyph atlas
+  scene/      the four renderers (one Scene each) and the rain's glyph atlas
   render/     RenderLoop (thread, EGL surface, frame pacing), PowerWatch (battery saver, heat)
   settings/   SharedPreferences ("fluid_motion")
-  wallpaper/  FluidWallpaperService + one subclass per wallpaper (three picker entries)
+  wallpaper/  FluidWallpaperService + one subclass per wallpaper (four picker entries)
   ui/         MainActivity, the Compose screen in cyberdeck_terminal's style
 app/src/main/assets/shaders/   GLSL ES 3.00 (shared with tools/shader-check)
 tools/shader-check/            the shaders run in WebGL2 with dumped frames
@@ -30,6 +30,11 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
    - **VELOCITY.** One pass.
      - **Light.** Panels (each its own slanted quad), lines, streaks and the flare are added up on a clear target.
      - **Background.** The background then goes in *under* the light by destination alpha (`ONE_MINUS_DST_ALPHA, ONE`), exactly the web's additive canvas over its CSS background.
+   - **DATA FLOW.** One pass and nine draw calls.
+     - **The board.** `FlowBoard` lays it out once per screen, a port of the web's board.ts rule for rule. `FlowSim` runs the packets, flashes and chip glows in fixed pools.
+     - **Background.** The CSS glows and the dot grid are worked out per pixel (`flow_bg.frag`): no texture.
+     - **Drawn over it.** The traces (and pin stubs), the vias and pads, and the chips. These are instances sent once per board, palette, glow and quality (`gl/Gl.kt` StaticInstances), redrawn each frame. There is no board layer to keep and read back.
+     - **Added.** The light: chips taking data in, afterglow, packets, heads, flashes (`FlowFrame.light`, a few KB a frame). A packet is one instance per stretch of trace it covers, its tail's fade worked out in the fragment shader.
 3. **Swap.** `eglSwapBuffers`.
 4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
    - CPU as thread time;
@@ -44,24 +49,25 @@ Simulations keep their own phases, advanced by `dt` and wrapped, so no clock tim
 ## Battery
 The objective is no hit to battery or performance. How it's met:
 - **Hidden means nothing runs.** `Engine.onVisibilityChanged(false)` stops the loop: no frames, no timers, a sleeping thread. Most of the day a live wallpaper is behind apps or the screen is off.
-- **Capped rates.** ECO 20, BALANCED 30 (the default) and SMOOTH 60 fps (`lib/Power.kt`).
-  - **No judder.** Each rate divides 60 and 120.
+- **Capped rates.** ECO, BALANCED 30 (the default) and SMOOTH 60 fps (`lib/Power.kt`). ECO takes the display's own slow rate from 20 up to 30 Hz (24 on the S25 Ultra), else 20.
+  - **No judder.** Each rate is one the display runs at, or divides 60 and 120.
   - **Refresh-rate hint.** The rate is passed to `Surface.setFrameRate` (Android 11+), so the S25 Ultra's LTPO panel can lower its refresh too.
 - **Battery saver gives a still frame** (default on). **Heat:** a moderate thermal status halves the rate, and severe or worse gives a still frame (default on). PowerWatch listens only while something is drawing.
 - **Easing ahead of heat** (Android 11+). The loop reads the thermal headroom every 10 s, between frames it draws anyway, so the reading never wakes the phone. Near the limit, SMOOTH eases to 30 fps, with hysteresis (`lib/Power.kt` Headroom).
 - **Low priority.** The GL context asks for LOW GPU priority (`EGL_IMG_context_priority`; Adreno honours it). The render thread runs at background priority, which puts it on the efficiency cores behind the app in front.
 - **Little per-frame work.** No allocation, a handful of draw calls, kilobytes of uploads, no depth or stencil buffers. A `glClear` before full-screen passes spares tiled GPUs a reload of the last frame.
+  - **No garbage.** `FrameAllocationTest` weighs a thousand frames of each wallpaper's motion and packing on the JVM, with escape analysis off so nothing is quietly optimized away: 0 bytes. Random ranges are `Span`s (two plain floats), because a Kotlin float range (`a..b`) boxes its ends at every read. Per-frame code loops over Lists by index, because a `for` over a List makes an iterator.
 - **Rain trail layer.** It is drawn at the screen's resolution, capped at 3 px per dp.
 - **System colours.** `onComputeColors` gives the system the palette's colours, so it never screenshots the wallpaper to work them out.
 - **Opaque surfaces.** The wallpaper window and the app's preview are RGBX, so the compositor never blends them.
 
 ## QUALITY and AUTO
-- **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass.
-  - Below the screen's resolution, NEURAL NET and VELOCITY draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
+- **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass, and DATA FLOW's soft glow round its traces and halos round its packets (`FlowParams.glow`).
+  - Below the screen's resolution, NEURAL NET, VELOCITY and DATA FLOW draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
   - At full resolution nothing extra is drawn.
 - **Applying a change.** A quality or glow change is applied at the scene's next frame, with the context current: the rain rebuilds and pre-warms again.
 - **AUTO CALIBRATE** (`ui/HomeState.kt`, rules in `Calibration`):
-  - **What it measures.** Each wallpaper is drawn in the preview at each quality that draws differently on this screen, at BALANCED's rate. Its frames are timed by FrameMeter. Where the GPU can't be timed it uses `glFinish` wall time, an upper bound, only while calibrating.
+  - **What it measures.** Each wallpaper is drawn in the preview at each quality that draws differently on this screen (`SceneKind.usesLinkGlow` marks the wallpapers whose LOW draws less, not just smaller), at BALANCED's rate. Its frames are timed by FrameMeter. Where the GPU can't be timed it uses `glFinish` wall time, an upper bound, only while calibrating.
   - **What it picks.** Each wallpaper gets the highest quality within 3 ms GPU and 3 ms CPU, and the rate is BALANCED. If even the chosen quality is over budget, the rate is ECO.
   - **Where it's kept.** The result is stored with the system build and screen (`Settings.calibrated`). The wallpapers read the quality and profile in force through `Settings.quality(kind)` and `effectivePower()`.
 
@@ -83,12 +89,15 @@ The objective is no hit to battery or performance. How it's met:
   - the palettes' contrast and the power rules;
   - the rain erases only what it drew, opens full and fades evenly;
   - links, colours and motion bounds;
-  - VELOCITY's geometry on 16:9 and on a phone.
+  - VELOCITY's geometry on 16:9 and on a phone;
+  - DATA FLOW's board: runs at 45°, no trace crossing or touching another, chip traces from their pins, the screen covered; its pools and arrays never overrun;
+  - **FlowBoardGoldenTest:** given the same random numbers, the board is the web's, chip for chip and trace for trace. 80 boards were compared in full against board.ts under Node when the port was made; a few are kept as checksums;
+  - **FrameAllocationTest:** a frame of each wallpaper allocates nothing.
 - **ShaderUniformsTest.** Every uniform a renderer sets is declared by its shaders, and every declared uniform is set.
 - **FrameDumpTest.** It writes what each scene sends the GPU on an S25 Ultra (1080 × 2340 at 2.8125 px per dp) to `app/build/shader-check/`.
 - **tools/shader-check.**
   - **What it does.** Headless Chromium (ANGLE validates GLSL ES strictly) compiles every shader, draws the dumped frames call for call as the renderers do, and writes `out/*.png`.
-  - **How it was checked.** The pictures were compared with the web's wallpapers at a phone viewport: the rain's brightness by eighths of the screen, the look of the other two.
+  - **How it was checked.** The pictures were compared with the web's wallpapers at a phone viewport: the rain's brightness by eighths of the screen, the look of the others.
 - **UI screenshots.**
   - **Setup.** Paparazzi 2 needs Java 21, Kotlin 2.3 and Android tools 32, so it runs in a scratch copy of the project, not here. The steps: add the plugin, force `sdk-common`/`common`/`sdklib` 31.12.0 on the buildscript classpath, use Kotlin 2.3.0, give the tests a JDK 21 launcher, then run `recordPaparazziDebug`.
-  - **What it renders.** The home screen at 384 × 832 dp.
+  - **What it renders.** The home screen at 384 × 832 dp. The build runs on JDK 21 too (`JAVA_HOME`), because the plugin needs it.
