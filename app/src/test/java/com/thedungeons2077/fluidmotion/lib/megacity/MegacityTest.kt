@@ -1,7 +1,7 @@
 /*
  * MegacityTest: MEGACITY's city (the same for a seed, its far layer nearly
  * a wall), signs and beacons only where they can be seen, the skyline
- * packed as the shader reads it, the figure on her ledge and her mesh, the
+ * packed as the shader reads it, the rooftop ledge, the
  * palette's tones, and the motion within its pools (the web's
  * appearance.test.ts megacity checks, here).
  */
@@ -14,7 +14,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 
 class MegacityTest {
     /** Screens (dp): an S25 Ultra at FHD+, a small old phone, a tablet in landscape, and one zoomed to 200%. */
@@ -65,25 +64,14 @@ class MegacityTest {
     }
 
     @Test
-    fun `the figure stands on her ledge on the screen left of the middle, and her mesh is sound`() {
+    fun `the rooftop ledge lies across the bottom left, its railing on it, drawn as whole triangles`() {
         for ((w, h) in screens) {
-            val f = CityLayout.placeFigure(w, h)
-            assertTrue(f.feet - f.height > 0 && f.feet < h && f.x < w / 2)
-            assertTrue(f.ledgeRight > f.x && f.railRight < f.x)
+            val l = CityLayout.placeLedge(w, h)
+            assertTrue(l.top > h * 0.8 && l.top < h)
+            assertTrue(l.right > 0 && l.right < w)
+            assertTrue(l.railTop < l.top)
         }
-        val v = Figure.VERTICES
-        val count = v.size / 2
-        assertTrue(Figure.TRIANGLES.all { it in 0 until count })
-        assertEquals(count, (0 until Figure.OUTLINES.size / 2).sumOf { Figure.OUTLINES[2 * it + 1] })
-        var area = 0.0
-        for (i in Figure.TRIANGLES.indices step 3) {
-            val a = Figure.TRIANGLES[i]
-            val b = Figure.TRIANGLES[i + 1]
-            val c = Figure.TRIANGLES[i + 2]
-            area += abs((v[2 * b] - v[2 * a]) * (v[2 * c + 1] - v[2 * a + 1]) - (v[2 * c] - v[2 * a]) * (v[2 * b + 1] - v[2 * a + 1])) / 2.0
-        }
-        assertTrue("figure area $area", area in 0.1..0.25)
-        val fg = CityLayout.foreground(CityLayout.build(384.0, 832.0, Rng(5)), CityLayout.tones(Palettes.NEON.colors), 2.8125f)
+        val fg = CityLayout.foreground(CityLayout.build(384.0, 832.0, Rng(5)), CityLayout.tones(Palettes.NEON.colors))
         assertEquals(0, fg.size % (CityLayout.SHAPE * 3))
         for (i in 5 until fg.size step CityLayout.SHAPE) assertTrue(fg[i] in 0f..1f)
     }
@@ -95,7 +83,7 @@ class MegacityTest {
         assertEquals(((c.cool shr 16) and 255) / 255f, t.skyTop[0], 1e-6f)
         assertEquals((c.accent and 255) / 255f, t.signWarm[2], 1e-6f)
         assertTrue(t.skyLow[0] > t.skyTop[0] && t.skyLow[2] > t.skyLow[1])
-        assertTrue(t.figure[2] > t.figure[0])
+        assertTrue(t.ledge[2] > t.ledge[0] && t.ledge[2] < t.faceNear[2])
     }
 
     @Test

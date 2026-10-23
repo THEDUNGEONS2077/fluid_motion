@@ -1,8 +1,8 @@
 /*
  * lib/megacity/MegacityParams.kt: MEGACITY's numbers, cyberdeck_terminal's
  * (src/wallpaper/megacity/params.ts), sizes in dp (CSS px there: the same
- * scale). A city of towers in blue haze at night, seen from a rooftop where
- * a lone figure stands on the ledge, looking out over it.
+ * scale). A city of towers in blue haze at night, seen from a rooftop ledge
+ * (the reference's figure on it left out at the user's wish).
  *
  * Layer: lib (data). Ranges are pairs of Doubles: the city is laid out in
  * Double, as JavaScript's numbers are, so the phone and the web lay out the
@@ -91,18 +91,19 @@ object MegacityParams {
     const val WINDOW_PERIOD = 4000f
     const val TIME_WRAP = WINDOW_PERIOD * 16
 
-    /** The figure on a tall screen and a wide one: her height (share of the screen's), her feet (down), her middle (across). */
-    const val TALL_HEIGHT = 0.6
-    const val TALL_FEET = 0.855
-    const val TALL_X = 0.43
-    const val WIDE_HEIGHT = 0.52
-    const val WIDE_FEET = 0.875
-    const val WIDE_X = 0.3
-
-    /** The ledge runs out past her, the railing's height, where it stops (shares of her height). */
-    const val LEDGE_OUT = 0.12
-    const val RAIL_HEIGHT = 0.11
-    const val RAIL_END = 0.09
+    /**
+     * The rooftop ledge in front, on a tall screen and a wide one: its top
+     * (share of the height), where it ends (a share of the width plus a share
+     * of the height), its glass railing's height (share of the height).
+     */
+    const val TALL_LEDGE_TOP = 0.855
+    const val TALL_LEDGE_RIGHT_W = 0.43
+    const val TALL_LEDGE_RIGHT_H = 0.072
+    const val TALL_RAIL = 0.066
+    const val WIDE_LEDGE_TOP = 0.875
+    const val WIDE_LEDGE_RIGHT_W = 0.3
+    const val WIDE_LEDGE_RIGHT_H = 0.0624
+    const val WIDE_RAIL = 0.0572
 
     /** The skyline texture's width (texels): a layer's columns wrap onto as many rows as they need. */
     const val SKYLINE_WIDTH = 2048

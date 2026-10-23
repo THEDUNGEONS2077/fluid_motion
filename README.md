@@ -6,7 +6,7 @@ Five live wallpapers for Android, from the [cyberdeck_terminal](https://thedunge
 - **NEURAL NET**: a drifting plexus of glowing nodes; signals run along its links.
 - **VELOCITY**: light caught in motion; slanted panels drift, streaks race past.
 - **DATA FLOW**: a circuit board at work; packets of light race along its traces, flash at vias and light up its chips.
-- **MEGACITY**: a city of towers in blue haze at night, a lone figure on a rooftop ledge looking out over it; windows go on and off, signs flicker, drones cross.
+- **MEGACITY**: a city of towers in blue haze at night, seen from a rooftop ledge; windows go on and off, signs flicker, drones cross.
 
 The app is their preview and settings, in the dashboard's terminal style. It is built to cost as little battery as possible:
 

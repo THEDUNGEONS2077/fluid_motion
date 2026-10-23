@@ -280,7 +280,7 @@ class FrameDumpTest {
     @Test
     fun `megacity as the phone draws it`() {
         dumpMegacity(1f, "megacity.json")
-        // Zoomed in (150%): larger towers and windows; the figure keeps her place.
+        // Zoomed in (150%): larger towers and windows; the ledge keeps its place.
         dumpMegacity(1.5f, "megacity-zoom.json")
     }
 
@@ -312,7 +312,7 @@ class FrameDumpTest {
                     .floats("winPale", tones.winPale).floats("winViolet", tones.winViolet).floats("winPink", tones.winPink).floats("winWhite", tones.winWhite).done(),
             )
             .num("windowGlow", p.GLOW.getValue(GlowLevel.HIGH).window)
-            .floats("skyline", CityLayout.skyline(city)).floats("foreground", CityLayout.foreground(city, tones, px))
+            .floats("skyline", CityLayout.skyline(city)).floats("foreground", CityLayout.foreground(city, tones))
             .floats("signs", signs, ns * CityFrame.SIGN).floats("glows", glows, ng * CityFrame.GLOW)
             .done()
         File(out, name).writeText(json)

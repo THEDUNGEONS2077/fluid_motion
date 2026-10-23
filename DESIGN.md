@@ -20,7 +20,7 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 
 | MEGACITY | Drawn per pixel in WebGL 2 | The same shaders, in OpenGL ES 3: the same city, pixel for pixel, from the same layout | One pass per pixel was already the cheapest way to draw tens of thousands of windows |
 
-**MEGACITY on a phone.** The reference is a phone wallpaper, so the phone has its composition: the figure 60% of the screen's height, left of the middle, on her ledge. The near layers of towers are sparse enough that the violet haze shows low down, as in the reference. ZOOM grows the towers and windows; she keeps her place. It starts in NEON.
+**MEGACITY on a phone.** The reference is a phone wallpaper, so the phone has its composition: the rooftop ledge across the bottom left (the reference's figure on it was left out at the user's wish, 0.6.1). The near layers of towers are sparse enough that the violet haze shows low down, as in the reference. ZOOM grows the towers and windows; the ledge keeps its place. It starts in NEON.
 
 **DATA FLOW on a phone.** The board's rules are the web's, so on a phone the chips are as big as they are in a browser of that size: the main chip spans about half the width, and its buses alone cover the share of the screen the board aims for (16% of its points). The loose traces that fill a monitor's board between the buses (about half of its traces, many ending in pads) are rare on a phone.
 

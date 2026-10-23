@@ -11,6 +11,6 @@
     <string name="velocity_description">Light caught in motion: slanted panels drifting, streaks racing past.</string>
     <string name="flow_label">DATA FLOW</string>
     <string name="megacity_label">MEGACITY</string>
-    <string name="megacity_description">A city of towers in blue haze at night, a lone figure on a rooftop ledge looking out over it.</string>
+    <string name="megacity_description">A city of towers in blue haze at night, seen from a rooftop ledge.</string>
     <string name="flow_description">A circuit board at work: packets of light racing along its traces, flashing at vias, lighting up its chips.</string>
 </resources>

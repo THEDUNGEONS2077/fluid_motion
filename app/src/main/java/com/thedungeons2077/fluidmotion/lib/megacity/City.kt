@@ -1,7 +1,7 @@
 /*
  * lib/megacity/City.kt: MEGACITY's city, laid out once per screen: the
- * layers of towers, the signs and beacons on them, the figure's place on
- * her ledge; the skyline texture the shader reads; the palette's tones; the
+ * layers of towers, the signs and beacons on them, the rooftop ledge in
+ * front; the skyline texture the shader reads; the palette's tones; the
  * foreground's triangles. A port of cyberdeck_terminal's
  * src/wallpaper/megacity/city.ts, rule for rule and in the same order of
  * random draws, in Double as JavaScript's numbers are: the same random
@@ -20,7 +20,6 @@ import com.thedungeons2077.fluidmotion.lib.megacity.MegacityParams.SKYLINE_WIDTH
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
@@ -36,8 +35,8 @@ class Sign(val x: Int, val y: Int, val w: Int, val h: Int, val layer: Int, val c
 /** A beacon on a roof or spire: where (dp), its layer, how often it blinks (s) and when. */
 class Beacon(val x: Double, val y: Double, val layer: Int, val period: Double, val phase: Double)
 
-/** The figure's place (dp): her middle, her feet, her height; the ledge's right end; the railing's top and right end. */
-class Placement(val x: Double, val feet: Double, val height: Double, val ledgeRight: Double, val railTop: Double, val railRight: Double)
+/** The rooftop ledge in front (dp): its top, its right end, the top of its glass railing. */
+class Ledge(val top: Double, val right: Double, val railTop: Double)
 
 /** A city on a w × h dp screen. */
 class City(
@@ -48,7 +47,7 @@ class City(
     val tops: List<FloatArray>,
     val signs: List<Sign>,
     val beacons: List<Beacon>,
-    val figure: Placement,
+    val ledge: Ledge,
 ) {
     /** Rows of the skyline texture each layer takes. */
     val rows: Int get() = (cols + SKYLINE_WIDTH - 1) / SKYLINE_WIDTH
@@ -72,8 +71,7 @@ class CityTones(
     val beacon: FloatArray,
     val droneWhite: FloatArray,
     val droneCool: FloatArray,
-    val figure: FloatArray,
-    val rim: FloatArray,
+    val seam: FloatArray,
     val ledge: FloatArray,
     val ledgeTop: FloatArray,
     val rail: FloatArray,
@@ -210,14 +208,13 @@ object CityLayout {
         return beacons
     }
 
-    /** Where the figure stands: left of the middle (smaller and lower on a wide screen); her ledge, her railing. */
-    fun placeFigure(w: Double, h: Double): Placement {
+    /** Where the rooftop ledge is: across the bottom left (lower on a wide screen), its railing on it. */
+    fun placeLedge(w: Double, h: Double): Ledge {
         val p = MegacityParams
         val tall = w < h
-        val height = (if (tall) p.TALL_HEIGHT else p.WIDE_HEIGHT) * h
-        val x = (if (tall) p.TALL_X else p.WIDE_X) * w
-        val feet = (if (tall) p.TALL_FEET else p.WIDE_FEET) * h
-        return Placement(x, feet, height, x + p.LEDGE_OUT * height, feet - p.RAIL_HEIGHT * height, x - p.RAIL_END * height)
+        val top = (if (tall) p.TALL_LEDGE_TOP else p.WIDE_LEDGE_TOP) * h
+        val right = if (tall) p.TALL_LEDGE_RIGHT_W * w + p.TALL_LEDGE_RIGHT_H * h else p.WIDE_LEDGE_RIGHT_W * w + p.WIDE_LEDGE_RIGHT_H * h
+        return Ledge(top, right, top - (if (tall) p.TALL_RAIL else p.WIDE_RAIL) * h)
     }
 
     /** Lays out the city for a w × h dp screen. */
@@ -228,7 +225,7 @@ object CityLayout {
         val tops = layers.map { columnTops(it, cols) }
         val signs = placeSigns(w, h, cols, layers, tops, d)
         val beacons = placeBeacons(h, cols, layers, tops, d)
-        return City(w, h, cols, layers, tops, signs, beacons, placeFigure(w, h))
+        return City(w, h, cols, layers, tops, signs, beacons, placeLedge(w, h))
     }
 
     /**
@@ -288,8 +285,7 @@ object CityLayout {
             beacon = accent,
             droneWhite = mix(bright, WHITE, 0.5f),
             droneCool = mix(cool, WHITE, 0.5f),
-            figure = mix(bg, cool, 0.16f),
-            rim = mix(cool, WHITE, 0.35f),
+            seam = mix(bg, cool, 0.16f),
             ledge = mix(bg, cool, 0.16f),
             ledgeTop = mix(mix(cool, WHITE, 0.15f), bg, 0.3f),
             rail = mix(bg, cool, 0.3f),
@@ -309,11 +305,11 @@ object CityLayout {
     }
 
     /**
-     * The foreground as triangles (SHAPE floats a vertex): the glass railing,
-     * the ledge, the figure's rim of light, the figure; each outline with a
-     * one-pixel edge fading out ([pxPerDp]: no multisampling here).
+     * The foreground as triangles (SHAPE floats a vertex): the glass railing
+     * (tinted glass, a top rail, posts), then the ledge with the light along
+     * its edge, a band and seams on its face.
      */
-    fun foreground(city: City, t: CityTones, pxPerDp: Float): FloatArray {
+    fun foreground(city: City, t: CityTones): FloatArray {
         val out = ArrayList<Float>()
         fun vertex(x: Double, y: Double, c: FloatArray, a: Float) {
             out += x.toFloat(); out += y.toFloat(); out += c[0] * a; out += c[1] * a; out += c[2] * a; out += a
@@ -322,64 +318,17 @@ object CityLayout {
             vertex(x0, y0, c, a); vertex(x1, y0, c, a); vertex(x0, y1, c, a)
             vertex(x1, y0, c, a); vertex(x1, y1, c, a); vertex(x0, y1, c, a)
         }
-        val f = city.figure
+        val l = city.ledge
         val w = city.w
         val h = city.h
-        // The glass railing: tinted glass, a top rail, posts.
-        rect(-2.0, f.railTop, f.railRight, f.feet, t.glass, 0.3f)
-        rect(-2.0, f.railTop, f.railRight, f.railTop + 2.2, t.rail, 1f)
-        for (x in doubleArrayOf(w * 0.02, (w * 0.02 + f.railRight) / 2, f.railRight - 3)) rect(x, f.railTop, x + 3, f.feet, t.rail, 1f)
-        // The ledge: its block, the light along its edge, a band and seams on its face.
-        rect(-2.0, f.feet, f.ledgeRight, h + 2, t.ledge, 1f)
-        rect(-2.0, f.feet, f.ledgeRight, f.feet + 1.6, t.ledgeTop, 0.85f)
-        rect(-2.0, f.feet + h * 0.03, f.ledgeRight, f.feet + h * 0.042, t.figure, 0.6f)
-        for (k in doubleArrayOf(0.22, 0.51, 0.8)) rect(f.ledgeRight * k, f.feet + h * 0.042, f.ledgeRight * k + 1, h + 2, t.figure, 0.5f)
-        // The figure: once as a rim of light, then herself.
-        val v = Figure.VERTICES
-        fun figure(dx: Double, dy: Double, c: FloatArray, a: Float) {
-            fun x(i: Int) = f.x + v[2 * i] * f.height + dx
-            fun y(i: Int) = f.feet - f.height + v[2 * i + 1] * f.height + dy
-            for (i in Figure.TRIANGLES) vertex(x(i), y(i), c, a)
-            // The edge: a band one pixel wide outside each outline, fading from the colour to nothing.
-            val fringe = 1.0 / pxPerDp
-            for (s in 0 until Figure.OUTLINES.size / 2) {
-                val first = Figure.OUTLINES[2 * s]
-                val count = Figure.OUTLINES[2 * s + 1]
-                val nx = DoubleArray(count)
-                val ny = DoubleArray(count)
-                for (k in 0 until count) {
-                    val a0 = first + (k + count - 1) % count
-                    val a1 = first + k
-                    val a2 = first + (k + 1) % count
-                    // Outward is to the left of travel on screen (y down) for these clockwise outlines: (dy, -dx).
-                    val e1x = y(a1) - y(a0)
-                    val e1y = -(x(a1) - x(a0))
-                    val e2x = y(a2) - y(a1)
-                    val e2y = -(x(a2) - x(a1))
-                    val l1 = hypot(e1x, e1y).takeIf { it > 0 } ?: 1.0
-                    val l2 = hypot(e2x, e2y).takeIf { it > 0 } ?: 1.0
-                    val sx = e1x / l1 + e2x / l2
-                    val sy = e1y / l1 + e2y / l2
-                    val ls = hypot(sx, sy).takeIf { it > 0 } ?: 1.0
-                    nx[k] = sx / ls
-                    ny[k] = sy / ls
-                }
-                for (k in 0 until count) {
-                    val k2 = (k + 1) % count
-                    val i1 = first + k
-                    val i2 = first + k2
-                    vertex(x(i1), y(i1), c, a)
-                    vertex(x(i2), y(i2), c, a)
-                    vertex(x(i2) + nx[k2] * fringe, y(i2) + ny[k2] * fringe, c, 0f)
-                    vertex(x(i1), y(i1), c, a)
-                    vertex(x(i2) + nx[k2] * fringe, y(i2) + ny[k2] * fringe, c, 0f)
-                    vertex(x(i1) + nx[k] * fringe, y(i1) + ny[k] * fringe, c, 0f)
-                }
-            }
-        }
-        val rim = max(1.2, f.height * 0.003)
-        figure(rim, -rim * 0.6, t.rim, 0.45f)
-        figure(0.0, 0.0, t.figure, 1f)
+        val railEnd = l.right - 3
+        rect(-2.0, l.railTop, railEnd, l.top, t.glass, 0.3f)
+        rect(-2.0, l.railTop, railEnd, l.railTop + 2.2, t.rail, 1f)
+        for (x in doubleArrayOf(w * 0.02, (w * 0.02 + railEnd) / 2, railEnd - 3)) rect(x, l.railTop, x + 3, l.top, t.rail, 1f)
+        rect(-2.0, l.top, l.right, h + 2, t.ledge, 1f)
+        rect(-2.0, l.top, l.right, l.top + 1.6, t.ledgeTop, 0.85f)
+        rect(-2.0, l.top + h * 0.03, l.right, l.top + h * 0.042, t.seam, 0.6f)
+        for (k in doubleArrayOf(0.22, 0.51, 0.8)) rect(l.right * k, l.top + h * 0.042, l.right * k + 1, h + 2, t.seam, 0.5f)
         return out.toFloatArray()
     }
 }

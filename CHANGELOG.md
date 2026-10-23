@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1 (build 8)
+- **MEGACITY without the figure** (your call): the city is seen from the rooftop ledge alone, its glass railing now running the length of it. The same on the dashboard (0.10.1).
+
+
 ## 0.6.0 (build 7)
 A fifth wallpaper: MEGACITY.
 

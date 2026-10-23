@@ -37,7 +37,7 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
      - **Added.** The light: chips taking data in, afterglow, packets, heads, flashes (`FlowFrame.light`, a few KB a frame). A packet is one instance per stretch of trace it covers, its tail's fade worked out in the fragment shader.
    - **MEGACITY.** One pass and four draw calls, with the web's own shaders (`mc_*`).
      - **The city.** `CityLayout` lays it out once per screen (a port of city.ts, rule for rule): per layer of towers, a skyline packed into a small RGBA32F texture. `mc_city.frag` works out every pixel once: the nearest tower it's inside, then its face, edges and windows from the tower's seed, the windows going on and off by the clock. Nothing about the city is sent per frame.
-     - **On top.** Signs, then haze patches, beacons and drones (`CityFrame`, a few KB a frame), then the railing, the ledge and the figure: triangles sent once per city, palette, quality and zoom, each outline with a one-pixel fading edge (no multisampling).
+     - **On top.** Signs, then haze patches, beacons and drones (`CityFrame`, a few KB a frame), then the railing and the ledge: triangles sent once per city, palette, quality and zoom.
 3. **Swap.** `eglSwapBuffers`.
 4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
    - CPU as thread time;
@@ -102,7 +102,7 @@ The objective is no hit to battery or performance. How it's met:
   - the rain erases only what it drew, opens full and fades evenly;
   - links, colours and motion bounds;
   - VELOCITY's geometry on 16:9 and on a phone;
-  - MEGACITY: the city the same for a seed, signs and beacons only where in sight, the skyline packed as the shader reads it, the figure's mesh, the motion's pools; **CityGoldenTest:** the city is the web's (ten cities compared by checksum);
+  - MEGACITY: the city the same for a seed, signs and beacons only where in sight, the skyline packed as the shader reads it, the ledge, the motion's pools; **CityGoldenTest:** the city is the web's (ten cities compared by checksum);
   - DATA FLOW's board: runs at 45°, no trace crossing or touching another, chip traces from their pins, the screen covered; its pools and arrays never overrun;
   - **FlowBoardGoldenTest:** given the same random numbers, the board is the web's, chip for chip and trace for trace. 80 boards were compared in full against board.ts under Node when the port was made; a few are kept as checksums;
   - **FrameAllocationTest:** a frame of each wallpaper allocates nothing;

@@ -10,12 +10,12 @@
  *      by the clock: nothing about the city is sent per frame;
  *   2. the signs, 3. the haze patches, beacons and drones: a few kilobytes
  *      a frame, from arrays made once;
- *   4. the railing, the ledge and the figure: triangles sent once per city,
+ *   4. the railing and the ledge: triangles sent once per city,
  *      palette, quality and zoom.
  * Nothing is allocated per frame. QUALITY below full resolution draws into a
  * smaller frame scaled up after (gl/ScaledTarget.kt); LOW also leaves out
  * the windows' halo. ZOOM lays the city out for a screen 1/zoom as big; the
- * figure keeps her place.
+ * ledge keeps its place.
  */
 package com.thedungeons2077.fluidmotion.scene.megacity
 
@@ -142,7 +142,7 @@ class MegacityRenderer(context: Context) : Scene {
     /** The foreground's triangles: position and premultiplied colour per vertex. */
     private fun sendForeground(c: City) {
         foregroundDirty = false
-        val data = CityLayout.foreground(c, tones, pxPerDp)
+        val data = CityLayout.foreground(c, tones)
         if (shapeVbo == 0) {
             val ids = IntArray(1)
             GLES30.glGenBuffers(1, ids, 0)
