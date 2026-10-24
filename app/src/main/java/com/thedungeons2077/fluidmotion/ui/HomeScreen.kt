@@ -268,6 +268,10 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, onCalibrate: () ->
 
         SectionTitle("INSIGHT")
         Insight(state)
+        // Everything behind INSIGHT and the measurements, as text to paste back while tuning the wallpapers.
+        DeckButton("COPY BATTERY DATA", state::copyBatteryData, Modifier.fillMaxWidth(), label = "copy the week's battery data, every measurement and the settings, to paste")
+        state.batteryNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(top = DeckSize.sm)) }
+        Spacer(Modifier.height(DeckSize.sm))
 
         SectionTitle("APP COLOURS")
         Swatches(Palettes.ALL, state.uiPalette.id, state::chooseUiPalette, "app colours")

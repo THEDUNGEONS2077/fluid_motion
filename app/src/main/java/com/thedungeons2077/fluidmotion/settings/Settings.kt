@@ -140,6 +140,11 @@ class Settings(context: Context) {
         get() = prefs.getString("impact.report", "") ?: ""
         set(value) = write { putString("impact.report", value) }
 
+    /** A wallpaper's latest MEASURE IMPACT report (COPY BATTERY DATA; kept from 0.7.1, empty until one has run on it). */
+    fun impactReport(kind: SceneKind): String = prefs.getString("impact.report.${kind.id}", "") ?: ""
+
+    fun setImpactReport(kind: SceneKind, report: String) = write { putString("impact.report.${kind.id}", report) }
+
     /** The wallpaper the app shows and sets. */
     var selected: SceneKind
         get() = SceneKind.find(prefs.getString("ui.selected", null))

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1 (build 10)
+- **COPY BATTERY DATA** (in INSIGHT): copies everything about the wallpapers' battery use as one text to paste back while we tune them:
+  - the phone, the app's version, the battery now;
+  - each wallpaper's settings and the power choices;
+  - the last AUTO CALIBRATE;
+  - the latest MEASURE IMPACT **of each wallpaper** (they're now kept per wallpaper; before, only the very last was);
+  - the measured cost model;
+  - INSIGHT's last eight days, day by day and hour by hour (local time).
+- Nothing leaves the phone except by your paste.
+
 ## 0.7.0 (build 9)
 **MEGACITY, much lighter.** Your measurements on 0.6.1 showed it as by far the heaviest wallpaper: 5.09 ms of graphics work a frame at ULTRA, against 2.02 for VELOCITY and 1.34 for MATRIX RAIN. It was the only one AUTO CALIBRATE had to drop to LOW.
 - **What changed.** Working out the city per pixel was most of that, yet the city only changes when a window goes on or off. So it's now drawn into memory once a second, and each frame just copies it, then adds what moves: signs, haze, beacons, drones and the ledge.

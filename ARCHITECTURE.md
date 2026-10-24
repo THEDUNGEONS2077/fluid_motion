@@ -90,6 +90,7 @@ The objective is no hit to battery or performance. How it's met:
   - `render/UsageRecorder.kt` keeps it for the wallpaper engines only (not the previews).
   - Spans open and close on visibility, rate, easing and kind changes. Frames come from FrameMeter's running totals.
   - It writes to `render/UsageStore.kt` (SharedPreferences `fluid_motion_usage`, one locked read, add and write) when the wallpaper goes off screen, and every 10 min between drawn frames. No timers, nothing per frame.
+- **COPY BATTERY DATA.** `lib/BatteryExport.kt` (pure, `BatteryExportTest`) formats all of it as one text with `--- SECTION ---` heads: the phone and battery, each wallpaper's settings, the last AUTO CALIBRATE, each wallpaper's latest MEASURE IMPACT (`Settings.impactReport(kind)`, from 0.7.1), the cost model, then INSIGHT's days and its log hour by hour in local time. `HomeState.copyBatteryData` gathers it and puts it on the clipboard: nothing is sent anywhere.
 - **The estimate.** `CostModel` turns time at each rate into mAh. It uses MEASURE IMPACT's measured extra current, latest per wallpaper and rate (`Settings.impactModel`), then the same rate on another wallpaper, then the measured mA per fps, then a typical 1.2 mA per fps.
 
 ## Lifecycle

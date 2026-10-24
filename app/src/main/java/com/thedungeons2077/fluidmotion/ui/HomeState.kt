@@ -6,7 +6,8 @@
  * It also runs AUTO CALIBRATE (each wallpaper's quality chosen from its
  * frames' measured cost: lib/Quality.kt), MEASURE IMPACT (the battery cost
  * of each rate, measured on the phone: lib/Impact.kt), shows INSIGHT (the
- * wallpapers' week: lib/Usage.kt), and gathers COPY DIAGNOSTICS.
+ * wallpapers' week: lib/Usage.kt), and gathers COPY DIAGNOSTICS and COPY
+ * BATTERY DATA (lib/BatteryExport.kt).
  *
  * Layer: ui (Compose state, main thread).
  */
@@ -26,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.thedungeons2077.fluidmotion.BuildConfig
+import com.thedungeons2077.fluidmotion.lib.BatteryData
+import com.thedungeons2077.fluidmotion.lib.BatteryExport
 import com.thedungeons2077.fluidmotion.lib.Calibration
 import com.thedungeons2077.fluidmotion.lib.CostModel
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
@@ -119,6 +122,9 @@ class HomeState(private val context: Context, private val settings: Settings, pr
     var impactReport by mutableStateOf(settings.impactReport)
         private set
     var runNote by mutableStateOf<String?>(null)
+
+    /** What COPY BATTERY DATA copied (shown under its button), or null. */
+    var batteryNote by mutableStateOf<String?>(null)
         private set
 
     private var runJob: Job? = null
@@ -407,6 +413,8 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                 val report = Impact.report(results, capacity, "${stamp()} · ${selected.label} · ${palette.label} · GLOW ${glow.label} · QUALITY ${quality.label} · ${Build.MANUFACTURER} ${Build.MODEL}")
                 impactReport = report
                 settings.impactReport = report
+                // Each wallpaper's latest kept too, for COPY BATTERY DATA.
+                settings.setImpactReport(selected, report)
                 // What each rate adds for this wallpaper, for INSIGHT's estimates (the latest per wallpaper and rate).
                 val base = results.first { it.fps == 0 }.mA
                 val model = CostModel.decode(settings.impactModel).toMutableMap()
@@ -452,18 +460,78 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         return if (tenths == Int.MIN_VALUE) Float.NaN else tenths / 10f
     }
 
-    /** Everything worth knowing to tune the wallpapers on this phone, copied for pasting (COPY DIAGNOSTICS). */
-    fun copyDiagnostics() {
-        val s = stats
+    /** The app, the phone and its display, the GPU (COPY DIAGNOSTICS and COPY BATTERY DATA start alike). */
+    private fun systemLines(): List<String> {
         val modes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             context.display?.supportedModes?.map { "%.0f".format(Locale.UK, it.refreshRate) }?.distinct()?.joinToString("/") ?: "?"
         } else {
             "?"
         }
-        val text = listOf(
+        return listOf(
             "fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
             "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · display Hz $modes",
             loop.info,
+        )
+    }
+
+    /** Copies [text] for pasting, under [label]. */
+    private fun copy(label: String, text: String) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+    }
+
+    /**
+     * COPY BATTERY DATA: everything about the wallpapers' battery use on
+     * this phone, for pasting back while tuning them (lib/BatteryExport.kt):
+     * the settings, the last AUTO CALIBRATE, each wallpaper's latest MEASURE
+     * IMPACT, the cost model, and INSIGHT's week day by day and hour by hour.
+     */
+    fun copyBatteryData() {
+        val battery = context.getSystemService(BatteryManager::class.java)
+        val sticky = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val plugged = (sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+        val level = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val capacity = Impact.capacityMah(battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER), level)
+        val temp = batteryTemperature()
+        val header = systemLines() + listOf(
+            "exported ${stamp()} · time zone ${ZoneId.systemDefault()}",
+            "battery " + listOfNotNull(
+                capacity?.let { "%.0f mAh".format(Locale.UK, it) },
+                "$level%",
+                if (temp.isNaN()) null else "%.1f °C".format(Locale.UK, temp),
+                if (plugged) "charging" else "on battery",
+                "battery saver ${powerState.powerSave}",
+                "thermal status ${powerState.thermal}",
+            ).joinToString(" · "),
+        )
+        val settingsLines = SceneKind.entries.map { k ->
+            "${k.label}: ${settings.palette(k).label} · GLOW ${settings.glow(k).label} · ZOOM ${Zoom.label(settings.zoom(k))} · QUALITY ${settings.quality(k).label}" +
+                (if (k == active) " · ● ON HOME" else "")
+        } + "POWER: ${mode.label} · ${effectivePower.profile.label} ($profileFps fps) · still in saver ${power.stillInSaver} · cool when hot ${power.coolWhenHot}"
+        // Each wallpaper's latest MEASURE IMPACT; the one from before they were kept apart (0.7.0 and earlier), if it's not among them.
+        val impacts = SceneKind.entries.map { settings.impactReport(it) }.filter { it.isNotEmpty() }
+        val legacy = settings.impactReport.takeIf { it.isNotEmpty() && it !in impacts }
+        val log = UsageStore.read(context)
+        val model = CostModel.decode(settings.impactModel)
+        val zone = ZoneId.systemDefault()
+        val data = BatteryData(
+            header = header,
+            settings = settingsLines,
+            calibration = calibrationReport + if (calibrationStale) " (measured on another system or screen)" else "",
+            impacts = impacts + listOfNotNull(legacy),
+            model = model,
+            log = log,
+            days = Usage.days(log, CostModel(model), zone, LocalDate.now(), count = 8),
+        )
+        copy("fluid_motion battery data", BatteryExport.text(data, zone) { SceneKind.find(it).label })
+        val hours = log.count { !it.empty }
+        batteryNote = "COPIED: $hours HOUR${if (hours == 1) "" else "S"} LOGGED, ${impacts.size + (if (legacy != null) 1 else 0)} MEASURE IMPACT REPORTS. PASTE IT WHERE YOU LIKE."
+    }
+
+    /** Everything worth knowing to tune the wallpapers on this phone, copied for pasting (COPY DIAGNOSTICS). */
+    fun copyDiagnostics() {
+        val s = stats
+        val text = (systemLines() + listOf(
             "wallpaper ${selected.label} · ${palette.label} · GLOW ${glow.label} · ${mode.label} · ${effectivePower.profile.label} ($profileFps fps) · QUALITY ${quality.label}" +
                 " · still in saver ${power.stillInSaver} · cool when hot ${power.coolWhenHot}",
             "phone: battery saver ${powerState.powerSave} · thermal status ${powerState.thermal}",
@@ -478,9 +546,8 @@ class HomeState(private val context: Context, private val settings: Settings, pr
             },
             calibrationReport.ifEmpty { "AUTO CALIBRATE: not run yet" } + if (calibrationStale) " (measured on another system or screen)" else "",
             impactReport.ifEmpty { "MEASURE IMPACT: not run yet" },
-        ).joinToString("\n")
-        val clipboard = context.getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText("fluid_motion diagnostics", text))
+        )).joinToString("\n")
+        copy("fluid_motion diagnostics", text)
     }
 
     /** Looks up which wallpaper is on the home screen (after the picker, say). */
