@@ -635,31 +635,77 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
       gl.uniform2f(p.u('uTarget'), target.width, target.height);
       gl.uniform1f(p.u('uDensity'), px);
     }
-    // render.
+    // The city's cache (resizeCache, drawCity): the target's size, the clock in whole seconds.
+    const second = Math.floor(d.time);
+    const cache = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, cache);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, target.width, target.height);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const cacheFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, cacheFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, cache, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) problems.push('megacity: the city cache is incomplete');
+    /** The city straight into what's bound (as before the cache), at the clock `time`. */
+    const drawCity = (time) => {
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.disable(gl.BLEND);
+      city.use();
+      gl.uniform1f(city.u('uTime'), time);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, skyline);
+      fullScreen();
+    };
+    /** The rest of the frame over the city: signs, glows, the foreground; then the scale-up. */
+    const lights = () => {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      for (const [p, v] of [[sign, signs], [glow, glows]]) {
+        if (!v.count) continue;
+        p.use();
+        gl.bindVertexArray(v.vao);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, v.count);
+      }
+      shape.use();
+      gl.bindVertexArray(fg.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, fg.count);
+      gl.bindVertexArray(null);
+      gl.disable(gl.BLEND);
+      target.end();
+    };
+    /** The screen's pixels now. */
+    const screen = () => {
+      const px = new Uint8Array(W * H * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      return px;
+    };
+    // First as before the cache (the city drawn in the frame, at the same whole second), to compare.
     target.begin();
-    gl.clearColor(0, 0, 0, 0);
+    drawCity(second);
+    lights();
+    const direct = screen();
+    // render: the city into its cache, then copied (upscale.frag at one to one), then the rest.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, cacheFbo);
+    gl.viewport(0, 0, target.width, target.height);
+    drawCity(second);
+    target.begin();
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.disable(gl.BLEND);
-    city.use();
-    gl.uniform1f(city.u('uTime'), d.time);
+    upscale.use();
+    gl.uniform1i(upscale.u('uFrame'), 0);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, skyline);
+    gl.bindTexture(gl.TEXTURE_2D, cache);
     fullScreen();
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    for (const [p, v] of [[sign, signs], [glow, glows]]) {
-      if (!v.count) continue;
-      p.use();
-      gl.bindVertexArray(v.vao);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, v.count);
-    }
-    shape.use();
-    gl.bindVertexArray(fg.vao);
-    gl.drawArrays(gl.TRIANGLES, 0, fg.count);
-    gl.bindVertexArray(null);
-    gl.disable(gl.BLEND);
-    target.end();
-    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}, no window halo; ` : ''}${d.cols} columns × ${d.layers} layers, ${signs.count} signs, ${glows.count} glows, ${fg.count} foreground vertices;`);
+    lights();
+    const cached = screen();
+    let worst = 0;
+    for (let i = 0; i < cached.length; i++) worst = Math.max(worst, Math.abs(cached[i] - direct[i]));
+    if (worst > 1) problems.push(`${name}: the cached city differs from the city drawn in the frame by up to ${worst}/255`);
+    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}, no window halo; ` : ''}${d.cols} columns × ${d.layers} layers, ${signs.count} signs, ${glows.count} glows, ${fg.count} foreground vertices; the city from its cache (second ${second}), within ${worst}/255 of drawing it in the frame;`);
   }
 
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).

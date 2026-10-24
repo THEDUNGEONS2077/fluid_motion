@@ -4,10 +4,16 @@
  * with cyberdeck_terminal's own shaders (mc_*.glsl: one set, byte for byte).
  *
  * Layer: scene (GL). One pass, four draw calls:
- *   1. the city, every pixel once (mc_city.frag): its layers of towers come
- *      from a small float texture of skylines sent once per city; windows,
- *      edges and haze are worked out per pixel, the windows going on and off
- *      by the clock: nothing about the city is sent per frame;
+ *   1. the city: its layers of towers come from a small float texture of
+ *      skylines sent once per city; windows, edges and haze are worked out
+ *      per pixel (mc_city.frag), the windows going on and off by the clock.
+ *      That's most of the frame's cost (5 ms a frame at ULTRA on the S25
+ *      Ultra, 2026-10-24), yet the city only changes when a window does: its
+ *      clock is used for nothing else. So the city is drawn into a cache
+ *      once a second (its clock in whole seconds: a window switches on the
+ *      second's edge, not a fraction after, which no one can see), and each
+ *      frame copies the cache: one texture read per pixel. A new city,
+ *      size, palette, glow or quality draws it again at once;
  *   2. the signs, 3. the haze patches, beacons and drones: a few kilobytes
  *      a frame, from arrays made once;
  *   4. the railing and the ledge: triangles sent once per city,
@@ -39,6 +45,7 @@ import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.scene.Scene
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.floor
 import kotlin.math.min
 
 /** The MEGACITY scene. */
@@ -49,6 +56,12 @@ class MegacityRenderer(context: Context) : Scene {
     private val shape = GlProgram(context.assets, "mc_shape.vert", "mc_shape.frag")
     private val empty = EmptyVao()
     private val target = ScaledTarget(context.assets)
+    // The city's cache: drawn once a second, copied each frame (the copy is the QUALITY upscale's shader, at one to one).
+    private val copy = GlProgram(context.assets, "fullscreen.vert", "upscale.frag")
+    private var cacheTexture = 0
+    private var cacheFbo = 0
+    /** The whole second the cache was drawn at; NaN: it must be drawn. */
+    private var cachedSecond = Float.NaN
 
     private var colors: PaletteColors = Palettes.NEON.colors
     private var tones: CityTones = CityLayout.tones(colors)
@@ -175,6 +188,7 @@ class MegacityRenderer(context: Context) : Scene {
         if (targetDirty) {
             targetDirty = false
             target.resize(screenW, screenH, quality.scale(density))
+            resizeCache()
             foregroundDirty = true
             dirty = true
         }
@@ -183,14 +197,16 @@ class MegacityRenderer(context: Context) : Scene {
         val ns = CityFrame.signs(s, tones, glowLevel, signArray, scratch)
         val ng = CityFrame.glows(s, tones, glowLevel, glowArray, scratch)
 
+        // 1. The city: into its cache when a new second has begun (or something changed), then copied.
+        val second = floor(s.time)
+        if (second != cachedSecond) drawCity(second)
         target.begin()
-        // 1. The city (every pixel: the clear only spares a tiled GPU loading the last frame).
+        // Every pixel is drawn: the clear only spares a tiled GPU loading the last frame.
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         GLES30.glDisable(GLES30.GL_BLEND)
-        city.use()
-        GLES30.glUniform1f(timeAt, s.time)
+        copy.use()
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, skyline)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, cacheTexture)
         empty.drawFullScreen()
         // 2–4. Signs, glows, the foreground: premultiplied (what has no alpha is added).
         GLES30.glEnable(GLES30.GL_BLEND)
@@ -213,9 +229,56 @@ class MegacityRenderer(context: Context) : Scene {
         target.end()
     }
 
-    /** Uniforms that hold until the screen, palette, glow, quality or zoom changes. */
+    /** The city's cache at the target's size (it's copied one to one), drawn again before it's next used. */
+    private fun resizeCache() {
+        releaseCache()
+        val ids = IntArray(1)
+        GLES30.glGenTextures(1, ids, 0)
+        cacheTexture = ids[0]
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, cacheTexture)
+        GLES30.glTexStorage2D(GLES30.GL_TEXTURE_2D, 1, GLES30.GL_RGBA8, target.width, target.height)
+        // One to one: nearest reads exactly the texel drawn.
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_NEAREST)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_NEAREST)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
+        GLES30.glGenFramebuffers(1, ids, 0)
+        cacheFbo = ids[0]
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, cacheFbo)
+        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, cacheTexture, 0)
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+        copy.use()
+        GLES30.glUniform1i(copy.u("uFrame"), 0)
+        cachedSecond = Float.NaN
+    }
+
+    /** Draws the city into its cache, its clock at [second] (whole seconds: windows switch on its edge). */
+    private fun drawCity(second: Float) {
+        cachedSecond = second
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, cacheFbo)
+        GLES30.glViewport(0, 0, target.width, target.height)
+        // Every pixel is drawn: the clear only spares a tiled GPU loading the cache's last picture.
+        GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+        GLES30.glDisable(GLES30.GL_BLEND)
+        city.use()
+        GLES30.glUniform1f(timeAt, second)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, skyline)
+        empty.drawFullScreen()
+    }
+
+    private fun releaseCache() {
+        if (cacheFbo != 0) GLES30.glDeleteFramebuffers(1, intArrayOf(cacheFbo), 0)
+        if (cacheTexture != 0) GLES30.glDeleteTextures(1, intArrayOf(cacheTexture), 0)
+        cacheFbo = 0
+        cacheTexture = 0
+    }
+
+    /** Uniforms that hold until the screen, palette, glow, quality or zoom changes (each draws the city's cache again). */
     private fun setUniforms(c: City) {
         dirty = false
+        cachedSecond = Float.NaN
         val p = MegacityParams
         city.use()
         GLES30.glUniform1i(city.u("uSkyline"), 0)
@@ -285,6 +348,8 @@ class MegacityRenderer(context: Context) : Scene {
         shapeVao = 0
         signs?.release()
         glows?.release()
+        releaseCache()
+        copy.release()
         target.release()
         empty.release()
         city.release()

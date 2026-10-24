@@ -37,6 +37,7 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
      - **Added.** The light: chips taking data in, afterglow, packets, heads, flashes (`FlowFrame.light`, a few KB a frame). A packet is one instance per stretch of trace it covers, its tail's fade worked out in the fragment shader.
    - **MEGACITY.** One pass and four draw calls, with the web's own shaders (`mc_*`).
      - **The city.** `CityLayout` lays it out once per screen (a port of city.ts, rule for rule): per layer of towers, a skyline packed into a small RGBA32F texture. `mc_city.frag` works out every pixel once: the nearest tower it's inside, then its face, edges and windows from the tower's seed, the windows going on and off by the clock. Nothing about the city is sent per frame.
+     - **Its cache** (0.7.0). The city's clock is used only to switch windows, so the city is drawn into a target-sized RGBA8 texture once a second (clock in whole seconds) and copied each frame (`upscale.frag` at one to one). A new city, size, palette, glow or quality draws it again at once. That took most of the frame's cost (5.09 ms at ULTRA on the S25 Ultra) off all but one frame a second. shader-check draws it both ways and requires them within 1/255 (they're identical).
      - **On top.** Signs, then haze patches, beacons and drones (`CityFrame`, a few KB a frame), then the railing and the ledge: triangles sent once per city, palette, quality and zoom.
 3. **Swap.** `eglSwapBuffers`.
 4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
@@ -61,6 +62,7 @@ The objective is no hit to battery or performance. How it's met:
 - **Little per-frame work.** No allocation, a handful of draw calls, kilobytes of uploads, no depth or stencil buffers. A `glClear` before full-screen passes spares tiled GPUs a reload of the last frame.
   - **No garbage.** `FrameAllocationTest` weighs a thousand frames of each wallpaper's motion and packing on the JVM, with escape analysis off so nothing is quietly optimized away: 0 bytes. Random ranges are `Span`s (two plain floats), because a Kotlin float range (`a..b`) boxes its ends at every read. Per-frame code loops over Lists by index, because a `for` over a List makes an iterator.
 - **Rain trail layer.** It is drawn at the screen's resolution, capped at 3 px per dp.
+- **Draw only what changes.** MEGACITY's city changes only when a window switches, so it's drawn once a second into a cache and copied each frame (0.7.0).
 - **System colours.** `onComputeColors` gives the system the palette's colours, so it never screenshots the wallpaper to work them out.
 - **Opaque surfaces.** The wallpaper window and the app's preview are RGBX, so the compositor never blends them.
 

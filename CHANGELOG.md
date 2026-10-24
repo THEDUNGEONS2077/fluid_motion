@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 (build 9)
+**MEGACITY, much lighter.** Your measurements on 0.6.1 showed it as by far the heaviest wallpaper: 5.09 ms of graphics work a frame at ULTRA, against 2.02 for VELOCITY and 1.34 for MATRIX RAIN. It was the only one AUTO CALIBRATE had to drop to LOW.
+- **What changed.** Working out the city per pixel was most of that, yet the city only changes when a window goes on or off. So it's now drawn into memory once a second, and each frame just copies it, then adds what moves: signs, haze, beacons, drones and the ledge.
+- **What you'll see.** The same picture, pixel for pixel. Windows now switch on the second's edge instead of a fraction after it, which no one can see.
+- **Memory.** One screen-sized picture (about 10 MB on the S25 Ultra).
+- **To compare** (same settings as before: MEGACITY, AMBER, GLOW MAX, battery saver as it was): AUTO CALIBRATE should now pick a higher quality for MEGACITY, and MEASURE IMPACT should show less current at every rate.
+  - **Before (0.6.1, ULTRA):** GPU 5.09 ms; ECO 24 +36 mA, BALANCED 30 +46 mA, SMOOTH 60 +122 mA (over STILL 123 mA).
+- **The same change on the dashboard** (cyberdeck_terminal 0.13.1).
+- **VELOCITY left as it is:** your numbers put it the lightest on the battery of those measured (+16 mA at BALANCED).
+
 ## 0.6.1 (build 8)
 - **MEGACITY without the figure** (your call): the city is seen from the rooftop ledge alone, its glass railing now running the length of it. The same on the dashboard (0.10.1).
 
