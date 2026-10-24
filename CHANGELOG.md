@@ -7,6 +7,7 @@
 - **Memory.** One screen-sized picture (about 10 MB on the S25 Ultra).
 - **To compare** (same settings as before: MEGACITY, AMBER, GLOW MAX, battery saver as it was): AUTO CALIBRATE should now pick a higher quality for MEGACITY, and MEASURE IMPACT should show less current at every rate.
   - **Before (0.6.1, ULTRA):** GPU 5.09 ms; ECO 24 +36 mA, BALANCED 30 +46 mA, SMOOTH 60 +122 mA (over STILL 123 mA).
+  - **After (0.7.0, ULTRA, measured on your S25 Ultra the same way):** GPU **0.93 ms** (−82%); ECO 24 +32 mA, BALANCED 30 **+30 mA** (−35%), SMOOTH 60 **+71 mA** (−42%), over the same STILL 123 mA. AUTO CALIBRATE now picks **ULTRA** for MEGACITY (it picked LOW), and it's no longer the heaviest wallpaper: MATRIX RAIN (1.49 ms) and VELOCITY (2.08 ms) cost more on the graphics card.
 - **The same change on the dashboard** (cyberdeck_terminal 0.13.1).
 - **VELOCITY left as it is:** your numbers put it the lightest on the battery of those measured (+16 mA at BALANCED).
 
