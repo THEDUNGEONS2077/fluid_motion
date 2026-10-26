@@ -1,6 +1,6 @@
 /*
  * scene/Scene.kt: what a wallpaper is to the render loop, and the catalog of
- * the three.
+ * the seven.
  *
  * Layer: scene (GL). A Scene draws one wallpaper into whatever surface is
  * current: the home screen's (wallpaper/FluidWallpaperService.kt) or the
@@ -14,9 +14,11 @@ import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
 import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.scene.flow.FlowRenderer
+import com.thedungeons2077.fluidmotion.scene.horizon.HorizonRenderer
 import com.thedungeons2077.fluidmotion.scene.megacity.MegacityRenderer
 import com.thedungeons2077.fluidmotion.scene.neural.NeuralRenderer
 import com.thedungeons2077.fluidmotion.scene.rain.RainRenderer
+import com.thedungeons2077.fluidmotion.scene.sunset.SunsetRenderer
 import com.thedungeons2077.fluidmotion.scene.velocity.VelocityRenderer
 
 /** One wallpaper's drawing. */
@@ -55,7 +57,8 @@ interface Scene {
 /**
  * The wallpapers: ids (stored in settings: never rename one), names as the
  * dashboard shows them, the palette each starts in (its reference's; DATA
- * FLOW, with no reference, in ICE: cyan and violet), whether QUALITY's
+ * FLOW, with no reference, in ICE: cyan and violet; HORIZON and SUNSET in
+ * the palettes made for them, SYNTH and OUTRUN), whether QUALITY's
  * [Quality.linkGlow] changes what it draws (NEURAL NET's link glow, DATA
  * FLOW's soft glows and halos, MEGACITY's window halo: AUTO CALIBRATE then
  * measures LOW apart), and
@@ -66,7 +69,9 @@ enum class SceneKind(val id: String, val label: String, val defaultPalette: Stri
     NEURAL("neural-net", "NEURAL NET", "blood", true),
     VELOCITY("velocity", "VELOCITY", "blood", false),
     DATA_FLOW("data-flow", "DATA FLOW", "ice", true),
-    MEGACITY("megacity", "MEGACITY", "neon", true);
+    MEGACITY("megacity", "MEGACITY", "neon", true),
+    HORIZON("horizon", "HORIZON", "synth", false),
+    SUNSET("sunset", "SUNSET", "outrun", false);
 
     /** A new scene of this kind. */
     fun create(context: Context): Scene = when (this) {
@@ -75,6 +80,8 @@ enum class SceneKind(val id: String, val label: String, val defaultPalette: Stri
         VELOCITY -> VelocityRenderer(context)
         DATA_FLOW -> FlowRenderer(context)
         MEGACITY -> MegacityRenderer(context)
+        HORIZON -> HorizonRenderer(context)
+        SUNSET -> SunsetRenderer(context)
     }
 
     companion object {

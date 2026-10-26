@@ -1,5 +1,5 @@
 /*
- * PalettesTest: the six palettes are cyberdeck_terminal's, and every text
+ * PalettesTest: the eight palettes are cyberdeck_terminal's, and every text
  * colour reads (WCAG AA) where the app draws it. A new palette must pass.
  */
 package com.thedungeons2077.fluidmotion.lib
@@ -10,8 +10,8 @@ import org.junit.Test
 
 class PalettesTest {
     @Test
-    fun `palettes are the six, phosphor first, ids unique`() {
-        assertEquals(listOf("phosphor", "amber", "ice", "neon", "blood", "azure"), Palettes.ALL.map { it.id })
+    fun `palettes are the eight, phosphor first, ids unique`() {
+        assertEquals(listOf("phosphor", "amber", "ice", "neon", "blood", "azure", "synth", "outrun"), Palettes.ALL.map { it.id })
         assertEquals("phosphor", Palettes.find("from-the-future").id)
         assertEquals("blood", Palettes.find("blood").id)
         assertEquals("phosphor", Palettes.find(null).id)

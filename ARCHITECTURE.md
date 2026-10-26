@@ -3,12 +3,12 @@
 ## Layers
 ```
 app/src/main/java/com/thedungeons2077/fluidmotion/
-  lib/        pure Kotlin: palettes, power rules, the five simulations, per-frame packing   (unit tested)
+  lib/        pure Kotlin: palettes, power rules, the seven wallpapers' simulations, framing and per-frame packing   (unit tested)
   gl/         EGL context (low GPU priority), shader programs, instance buffers
-  scene/      the five renderers (one Scene each) and the rain's glyph atlas
+  scene/      the seven renderers (one Scene each) and the rain's glyph atlas
   render/     RenderLoop (thread, EGL surface, frame pacing), PowerWatch (battery saver, heat)
   settings/   SharedPreferences ("fluid_motion")
-  wallpaper/  FluidWallpaperService + one subclass per wallpaper (five picker entries)
+  wallpaper/  FluidWallpaperService + one subclass per wallpaper (seven picker entries)
   ui/         MainActivity, the Compose screen in cyberdeck_terminal's style
 app/src/main/assets/shaders/   GLSL ES 3.00 (shared with tools/shader-check)
 tools/shader-check/            the shaders run in WebGL2 with dumped frames
@@ -39,6 +39,12 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
      - **The city.** `CityLayout` lays it out once per screen (a port of city.ts, rule for rule): per layer of towers, a skyline packed into a small RGBA32F texture. `mc_city.frag` works out every pixel once: the nearest tower it's inside, then its face, edges and windows from the tower's seed, the windows going on and off by the clock. Nothing about the city is sent per frame.
      - **Its cache** (0.7.0). The city's clock is used only to switch windows, so the city is drawn into a target-sized RGBA8 texture once a second (clock in whole seconds) and copied each frame (`upscale.frag` at one to one). A new city, size, palette, glow or quality draws it again at once. That took most of the frame's cost (5.09 ms at ULTRA on the S25 Ultra) off all but one frame a second. shader-check draws it both ways and requires them within 1/255 (they're identical).
      - **On top.** Signs, then haze patches, beacons and drones (`CityFrame`, a few KB a frame), then the railing and the ledge: triangles sent once per city, palette, quality and zoom.
+   - **HORIZON** (0.8.0). One pass, four draw calls at most, with the web's own shaders (`hz_*`).
+     - **The sky** over the top half, worked out per pixel each frame. The web draws it once and keeps it, but a phone's screen doesn't keep its last picture, and reading a kept copy back every frame is memory traffic: more battery than the sky's few sums.
+     - **The land** (`lib/horizon/Land.kt`) is made once per screen shape and zoom: jittered points, cut into triangles, sent once. Each strip is placed by the vertex shader at its distance from the camera, so a frame sends one number (`uCamZ`).
+     - **No depth buffer.** The mesh lists the far wall, then the strips far end first. Two draws (`HorizonDraw`) cover them back to front from wherever the camera is, with back faces culled, so nearer hills cover farther ones. That spares a screen-sized depth buffer written and cleared every frame.
+     - **Triangle budget.** The cell follows the screen's shape (`HorizonView`), and zoomed out it grows to stay within 24 000 quads: about 17 000 at 100% on the S25 Ultra.
+   - **SUNSET** (0.8.0). One pass, two draw calls, no geometry, no textures, with the web's own shaders (`ss_*`). The sky above the horizon and the ground below it are each one full-screen triangle, scissored. The ground's only per-frame input is how far the grid has come (`uTravel`).
 3. **Swap.** `eglSwapBuffers`.
 4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
    - CPU as thread time;
@@ -62,7 +68,7 @@ The objective is no hit to battery or performance. How it's met:
 - **Little per-frame work.** No allocation, a handful of draw calls, kilobytes of uploads, no depth or stencil buffers. A `glClear` before full-screen passes spares tiled GPUs a reload of the last frame.
   - **No garbage.** `FrameAllocationTest` weighs a thousand frames of each wallpaper's motion and packing on the JVM, with escape analysis off so nothing is quietly optimized away: 0 bytes. Random ranges are `Span`s (two plain floats), because a Kotlin float range (`a..b`) boxes its ends at every read. Per-frame code loops over Lists by index, because a `for` over a List makes an iterator.
 - **Rain trail layer.** It is drawn at the screen's resolution, capped at 3 px per dp.
-- **Draw only what changes.** MEGACITY's city changes only when a window switches, so it's drawn once a second into a cache and copied each frame (0.7.0).
+- **Draw only what changes.** MEGACITY's city changes only when a window switches, so it's drawn once a second into a cache and copied each frame (0.7.0). A cache pays only when what it saves is dear: HORIZON's and SUNSET's skies are a few sums a pixel, cheaper to work out again than to read back (0.8.0).
 - **System colours.** `onComputeColors` gives the system the palette's colours, so it never screenshots the wallpaper to work them out.
 - **Opaque surfaces.** The wallpaper window and the app's preview are RGBX, so the compositor never blends them.
 
@@ -77,7 +83,7 @@ The objective is no hit to battery or performance. How it's met:
 
 ## QUALITY and AUTO
 - **QUALITY.** `lib/Quality.kt` caps the px per dp a wallpaper is drawn with: LOW 1.5, MEDIUM 2.25, HIGH 3, ULTRA uncapped. LOW also drops NEURAL NET's link glow pass, DATA FLOW's soft glow round its traces and halos round its packets (`FlowParams.glow`), and MEGACITY's window halo.
-  - Below the screen's resolution, NEURAL NET, VELOCITY, DATA FLOW and MEGACITY draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
+  - Below the screen's resolution, NEURAL NET, VELOCITY, DATA FLOW, MEGACITY, HORIZON and SUNSET draw into a smaller frame, which `gl/ScaledTarget.kt` scales up in one pass. The rain scales its own trail layer and atlas.
   - At full resolution nothing extra is drawn.
 - **Applying a change.** A quality or glow change is applied at the scene's next frame, with the context current: the rain rebuilds and pre-warms again.
 - **AUTO CALIBRATE** (`ui/HomeState.kt`, rules in `Calibration`):
@@ -110,7 +116,8 @@ The objective is no hit to battery or performance. How it's met:
   - **FlowBoardGoldenTest:** given the same random numbers, the board is the web's, chip for chip and trace for trace. 80 boards were compared in full against board.ts under Node when the port was made; a few are kept as checksums;
   - **FrameAllocationTest:** a frame of each wallpaper allocates nothing;
   - **ZoomTest:** the steps, and what a zoom does to the neural net's counts and VELOCITY's sizes.
-- **Zoomed frames.** FrameDumpTest also dumps each scene at 150% (and DATA FLOW at 50%; MEGACITY also drawn at LOW), which shader-check draws as `*-zoom.png`.
+- **HORIZON and SUNSET** (`HorizonTest`, `SunsetTest`): the land the same for a seed and within bounds; every triangle facing the camera; the draw order back to front at any camera distance; the triangle budget at every zoom; on 16:9 the web's own framing; on an upright phone the cells, the sun and the grid's shape and pace as DESIGN.md says.
+- **Zoomed frames.** FrameDumpTest also dumps each scene at 150% (and DATA FLOW at 50%; MEGACITY, HORIZON and SUNSET also drawn at LOW), which shader-check draws as `*-zoom.png`.
 - **ShaderUniformsTest.** Every uniform a renderer sets is declared by its shaders, and every declared uniform is set.
 - **FrameDumpTest.** It writes what each scene sends the GPU on an S25 Ultra (1080 × 2340 at 2.8125 px per dp) to `app/build/shader-check/`.
 - **tools/shader-check.**

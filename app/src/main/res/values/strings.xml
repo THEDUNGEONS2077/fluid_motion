@@ -12,5 +12,9 @@
     <string name="flow_label">DATA FLOW</string>
     <string name="megacity_label">MEGACITY</string>
     <string name="megacity_description">A city of towers in blue haze at night, seen from a rooftop ledge.</string>
+    <string name="horizon_label">HORIZON</string>
+    <string name="horizon_description">A glowing wireframe land running to a hot pink horizon, gliding toward you.</string>
+    <string name="sunset_label">SUNSET</string>
+    <string name="sunset_description">The striped outrun sun over a glowing grid that glides toward you, under the stars.</string>
     <string name="flow_description">A circuit board at work: packets of light racing along its traces, flashing at vias, lighting up its chips.</string>
 </resources>

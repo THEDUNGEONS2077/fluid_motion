@@ -1,5 +1,5 @@
 /**
- * tools/shader-check/render.js: runs in the page. Draws the five scenes
+ * tools/shader-check/render.js: runs in the page. Draws the seven scenes
  * the way their Kotlin renderers do (app/.../scene/<scene>/…Renderer.kt),
  * call for call, with the real shaders and the frames the JVM dump wrote.
  * Keep the two in step: a renderer change belongs here too.
@@ -708,6 +708,148 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}, no window halo; ` : ''}${d.cols} columns × ${d.layers} layers, ${signs.count} signs, ${glows.count} glows, ${fg.count} foreground vertices; the city from its cache (second ${second}), within ${worst}/255 of drawing it in the frame;`);
   }
 
+  // --- HORIZON (scene/horizon/HorizonRenderer.kt) ---------------------------------------
+  function horizon(d, low = false, name = low ? 'horizon-low' : 'horizon') {
+    const target = scaledTarget(low ? d.lowScale : 1);
+    const v = low ? d.low : d.full;
+    const t = d.tones;
+    const sky = program('hz_full.vert', 'hz_sky.frag');
+    const land = program('hz_land.vert', 'hz_land.frag');
+    // sendMesh: per vertex (x, height), then (strip, row in it, depth offset, corner).
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(d.mesh), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 24, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 24, 8);
+    gl.bindVertexArray(null);
+    // setUniforms.
+    for (const p of [sky, land]) {
+      p.use();
+      gl.uniform2f(p.u('uTarget'), target.width, target.height);
+      gl.uniform2f(p.u('uSun'), v.sun[0], v.sun[1]);
+      gl.uniform1f(p.u('uGlowR'), v.glowR);
+      gl.uniform2f(p.u('uDome'), v.dome[0], v.dome[1]);
+      gl.uniform3fv(p.u('uSkyTop'), new Float32Array(t.skyTop));
+      gl.uniform3fv(p.u('uSkyLow'), new Float32Array(t.skyLow));
+      gl.uniform3fv(p.u('uGlow'), new Float32Array(t.glow));
+      gl.uniform1f(p.u('uCoreR'), v.coreR);
+      gl.uniform3fv(p.u('uCore'), new Float32Array(t.core));
+    }
+    land.use();
+    gl.uniform1f(land.u('uDensity'), v.density);
+    gl.uniform1f(land.u('uFocal'), v.focal);
+    gl.uniform1f(land.u('uHorizon'), v.horizon);
+    gl.uniform1f(land.u('uCamH'), d.camH);
+    gl.uniform1f(land.u('uNear'), d.near);
+    gl.uniform1f(land.u('uFar'), d.far);
+    gl.uniform1f(land.u('uRows'), d.rows);
+    gl.uniform1f(land.u('uCell'), d.cell);
+    gl.uniform3fv(land.u('uLine'), new Float32Array(t.line));
+    gl.uniform3fv(land.u('uFace'), new Float32Array(t.face));
+    gl.uniform1f(land.u('uLineW'), d.lineW);
+    gl.uniform1f(land.u('uGlowW'), d.glowW);
+    gl.uniform1f(land.u('uGlowA'), d.glowA);
+    gl.uniform1f(land.u('uSoftNear'), d.softNear);
+    gl.uniform1f(land.u('uSoften'), d.soften);
+    gl.uniform1f(land.u('uFogStart'), d.fogStart);
+    gl.uniform1f(land.u('uFogEnd'), d.fogEnd);
+    // render: the sky over the top half, then the land: the wall, the strips far end first, back faces dropped, no depth buffer.
+    const w = target.width;
+    const h = target.height;
+    target.begin();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    gl.enable(gl.SCISSOR_TEST);
+    const skyFrom = Math.max(0, Math.floor(h * (1 - d.horizonShare)) - 1);
+    gl.scissor(0, skyFrom, w, h - skyFrom);
+    sky.use();
+    fullScreen();
+    gl.scissor(0, 0, w, Math.ceil(h * (1 - d.horizonShare)) + 1);
+    gl.enable(gl.CULL_FACE);
+    land.use();
+    gl.uniform1f(land.u('uCamZ'), d.camZ);
+    gl.bindVertexArray(vao);
+    gl.drawArrays(gl.TRIANGLES, 0, d.wallVertices);
+    // HorizonDraw.nearStrip / farFirst.
+    const near = Math.max(0, Math.ceil(d.camZ / d.cell - 1 + 1e-6) % d.rows);
+    const per = d.stripVertices;
+    if (near > 0) gl.drawArrays(gl.TRIANGLES, d.wallVertices + (d.rows - near) * per, near * per);
+    gl.drawArrays(gl.TRIANGLES, d.wallVertices, (d.rows - near) * per);
+    gl.bindVertexArray(null);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.SCISSOR_TEST);
+    target.end();
+    snapshot(name, `${low ? `LOW: drawn ${w}×${h}; ` : ''}${d.rows} rows × ${d.cols - 1} quads (cell ${d.cell.toFixed(3)}), ${(d.mesh.length / 6) | 0} vertices;`);
+  }
+
+  // --- SUNSET (scene/sunset/SunsetRenderer.kt) -------------------------------------------
+  function sunset(d, low = false, name = low ? 'sunset-low' : 'sunset') {
+    const target = scaledTarget(low ? d.lowScale : 1);
+    const v = low ? d.low : d.full;
+    const t = d.tones;
+    const sky = program('ss_full.vert', 'ss_sky.frag');
+    const ground = program('ss_full.vert', 'ss_ground.frag');
+    // setUniforms.
+    for (const p of [sky, ground]) {
+      p.use();
+      gl.uniform2f(p.u('uTarget'), target.width, target.height);
+      gl.uniform1f(p.u('uUnit'), v.unit);
+      gl.uniform1f(p.u('uHorizon'), v.horizon);
+      gl.uniform1f(p.u('uScanEvery'), d.scanEvery);
+      gl.uniform1f(p.u('uScanDepth'), d.scanDepth);
+      gl.uniform2f(p.u('uSun'), v.sun[0], v.sun[1]);
+      gl.uniform1f(p.u('uSunR'), v.sunR);
+      gl.uniform1f(p.u('uGlowR'), v.glowR);
+      gl.uniform3fv(p.u('uSkyLeft'), new Float32Array(t.skyLeft));
+      gl.uniform3fv(p.u('uSkyRight'), new Float32Array(t.skyRight));
+      gl.uniform3fv(p.u('uGlow'), new Float32Array(t.glow));
+    }
+    sky.use();
+    gl.uniform3fv(sky.u('uSkyTop'), new Float32Array(t.skyTop));
+    gl.uniform3fv(sky.u('uSunTop'), new Float32Array(t.sunTop));
+    gl.uniform3fv(sky.u('uSunBase'), new Float32Array(t.sunBase));
+    gl.uniform3fv(sky.u('uStar'), new Float32Array(t.star));
+    gl.uniform3fv(sky.u('uStripe'), new Float32Array(d.stripe));
+    gl.uniform1f(sky.u('uGapGrow'), d.gapGrow);
+    gl.uniform1f(sky.u('uStarCell'), d.starCell);
+    gl.uniform1f(sky.u('uStarChance'), d.starChance);
+    ground.use();
+    gl.uniform1f(ground.u('uFocal'), v.focal);
+    gl.uniform1f(ground.u('uCamH'), v.camH);
+    gl.uniform1f(ground.u('uLine'), d.line);
+    gl.uniform1f(ground.u('uGlowW'), d.glowW);
+    gl.uniform3fv(ground.u('uWave'), new Float32Array(d.wave));
+    gl.uniform1f(ground.u('uDrift'), d.drift);
+    gl.uniform1f(ground.u('uMeltH'), v.melt);
+    gl.uniform3fv(ground.u('uGround'), new Float32Array(t.ground));
+    gl.uniform3fv(ground.u('uWarm'), new Float32Array(t.warm));
+    gl.uniform3fv(ground.u('uCool'), new Float32Array(t.cool));
+    // render: the sky above the horizon, the ground below it.
+    const w = target.width;
+    const h = target.height;
+    target.begin();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    gl.enable(gl.SCISSOR_TEST);
+    const groundRows = Math.ceil(h * (1 - d.horizonShare));
+    const skyFrom = Math.max(0, Math.floor(h * (1 - d.horizonShare)) - 1);
+    gl.scissor(0, skyFrom, w, h - skyFrom);
+    sky.use();
+    fullScreen();
+    gl.scissor(0, 0, w, groundRows);
+    ground.use();
+    gl.uniform1f(ground.u('uTravel'), d.travel);
+    fullScreen();
+    gl.disable(gl.SCISSOR_TEST);
+    target.end();
+    snapshot(name, `${low ? `LOW: drawn ${w}×${h}; ` : ''}camera ${v.camH.toFixed(2)} up, sun r ${v.sunR.toFixed(0)} px;`);
+  }
+
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
   const runs = [
     ['rain', () => rain(dumps.rain, 'rain')],
@@ -727,6 +869,12 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     ['megacity', () => megacity(dumps.megacity)],
     ['megacity-low', () => megacity(dumps.megacity, true)],
     ['megacity-zoom', () => megacity(dumps['megacity-zoom'], false, 'megacity-zoom')],
+    ['horizon', () => horizon(dumps.horizon)],
+    ['horizon-low', () => horizon(dumps.horizon, true)],
+    ['horizon-zoom', () => horizon(dumps['horizon-zoom'], false, 'horizon-zoom')],
+    ['sunset', () => sunset(dumps.sunset)],
+    ['sunset-low', () => sunset(dumps.sunset, true)],
+    ['sunset-zoom', () => sunset(dumps['sunset-zoom'], false, 'sunset-zoom')],
   ];
   for (const [name, fn] of runs) {
     try {

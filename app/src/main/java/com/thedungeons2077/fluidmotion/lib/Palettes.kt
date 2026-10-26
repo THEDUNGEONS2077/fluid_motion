@@ -1,6 +1,7 @@
 /*
- * lib/Palettes.kt: the colour palettes, the same six as cyberdeck_terminal
- * (src/lib/palettes.ts there): PHOSPHOR, AMBER, ICE, NEON, BLOOD, AZURE.
+ * lib/Palettes.kt: the colour palettes, the same eight as cyberdeck_terminal
+ * (src/lib/palettes.ts there): PHOSPHOR, AMBER, ICE, NEON, BLOOD, AZURE,
+ * SYNTH and OUTRUN (0.8.0, made there for HORIZON and SUNSET).
  *
  * Layer: lib (pure Kotlin, no Android). A palette is the handful of base
  * colours everything is built from: the app's UI tokens (ui/theme) and the
@@ -68,9 +69,19 @@ object Palettes {
         "azure", "AZURE",
         PaletteColors(0x000000, 0x04080f, 0x08101c, 0x12264a, 0x0b3a7a, 0x001a40, 0x3d84d0, 0x55a2ee, 0x3ca0ff, 0x1a5fb0, 0xcfe4ff, 0x0b3c99),
     )
+    /** Hot pink over teal: HORIZON's reference, a synthwave sun over a wireframe land. */
+    val SYNTH = Palette(
+        "synth", "SYNTH",
+        PaletteColors(0x000000, 0x0c0408, 0x160710, 0x3a1027, 0x5c0a33, 0x2a0016, 0xd0568c, 0xee6fa6, 0xff3d8b, 0xa01d55, 0xffd0e2, 0x2fb8b4),
+    )
+    /** A golden sun melting into hot pink, over blue: SUNSET's reference, the outrun sun. */
+    val OUTRUN = Palette(
+        "outrun", "OUTRUN",
+        PaletteColors(0x000000, 0x0a0510, 0x140a1c, 0x2e1640, 0x4a1a5c, 0x26082e, 0xd65a9c, 0xf27cb4, 0xff3e7f, 0xa3204f, 0xffd75e, 0x3a8dff),
+    )
 
     /** Every palette, in order. */
-    val ALL: List<Palette> = listOf(PHOSPHOR, AMBER, ICE, NEON, BLOOD, AZURE)
+    val ALL: List<Palette> = listOf(PHOSPHOR, AMBER, ICE, NEON, BLOOD, AZURE, SYNTH, OUTRUN)
 
     /** The palette with [id], or PHOSPHOR if it's unknown (settings from a newer version, say). */
     fun find(id: String?): Palette = ALL.firstOrNull { it.id == id } ?: PHOSPHOR

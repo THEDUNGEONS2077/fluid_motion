@@ -1,7 +1,7 @@
 # Design
 
 ## Origin
-The wallpapers are cyberdeck_terminal's (`~/projects/cyberdeck_terminal/src/wallpaper/`). MATRIX RAIN, NEURAL NET and VELOCITY were each matched there to a reference image; DATA FLOW was designed there, at full fidelity, then brought here; MEGACITY was matched there to the user's reference and brought here with the same shaders. Its DESIGN.md has the measurements. Here they're redrawn on the GPU to look the same: same parameters, same colours, same compositing. The app's own screen is the dashboard's design system (theme.css and app.css) in Compose.
+The wallpapers are cyberdeck_terminal's (`~/projects/cyberdeck_terminal/src/wallpaper/`). MATRIX RAIN, NEURAL NET and VELOCITY were each matched there to a reference image; DATA FLOW was designed there, at full fidelity, then brought here; MEGACITY, HORIZON and SUNSET were matched there to the user's references and brought here with the same shaders. Its DESIGN.md has the measurements. Here they're redrawn on the GPU to look the same: same parameters, same colours, same compositing. The app's own screen is the dashboard's design system (theme.css and app.css) in Compose.
 
 ## The wallpapers on a phone
 The web versions were tuned on a landscape monitor. On a portrait phone, a few things are measured differently, so that each still looks like its reference.
@@ -20,11 +20,18 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 
 | MEGACITY | Drawn per pixel in WebGL 2 | The same shaders, in OpenGL ES 3: the same city, pixel for pixel, from the same layout | One pass per pixel was already the cheapest way to draw tens of thousands of windows |
 
+| HORIZON | A 16:9 layout: about 3.6 cells across the bottom, 41 at the haze | The web's camera and lens; cells smaller by how much narrower the screen is (about 3.85 on the S25 Ultra), so as many across, near and far, passing at the web's pace in cells | A narrow screen sees a narrow slice of the land: at the web's cells only a cell or two would cross it |
+| HORIZON sky | Drawn once, kept by the canvas | Worked out each frame (top half) | A phone's screen doesn't keep its picture; reading a kept copy back costs more than the sums |
+| HORIZON land | 64 units deep, nearest strips first with a depth buffer | 48 units deep (the haze hides the land from 44), farthest first, back faces culled, no depth buffer | A quarter fewer triangles; no screen-sized buffer written each frame |
+| SUNSET sun | Scaled by the height | Scaled by the short side (the width), kept on the horizon as far up, in its radii, as on the web | Scaled by a phone's height, it would fill three quarters of the width |
+| SUNSET grid | The camera at 1 unit | The camera risen by √(how much narrower the screen is): about half the web's squares across, bigger, the same shape, moving at the same pace on screen | Rising the full ratio (all the web's squares) crowded the far rows into a haze from far below the horizon, the sun's base cut well above the grid |
+| SUNSET melt | 5% of the height below the horizon | √(composition × focal × camera height) × 5%: as far as the grid's lines crowd | So the grid fades straight into the sky, with no dark band |
+
 **MEGACITY on a phone.** The reference is a phone wallpaper, so the phone has its composition: the rooftop ledge across the bottom left (the reference's figure on it was left out at the user's wish, 0.6.1). The near layers of towers are sparse enough that the violet haze shows low down, as in the reference. ZOOM grows the towers and windows; the ledge keeps its place. It starts in NEON.
 
 **DATA FLOW on a phone.** The board's rules are the web's, so on a phone the chips are as big as they are in a browser of that size: the main chip spans about half the width, and its buses alone cover the share of the screen the board aims for (16% of its points). The loose traces that fill a monitor's board between the buses (about half of its traces, many ending in pads) are rare on a phone.
 
-**Glow levels** are the web's (LOW, MEDIUM, HIGH, MAX), each wallpaper reading them its own way. **Palettes** are the web's six. Each wallpaper starts in its reference's palette: the rain in PHOSPHOR, NEURAL NET and VELOCITY in BLOOD. DATA FLOW, with no reference, starts in ICE (cyan traces, violet ones and a violet glow); MEGACITY in NEON (its reference's blue haze and pink signs).
+**Glow levels** are the web's (LOW, MEDIUM, HIGH, MAX), each wallpaper reading them its own way. **Palettes** are the web's eight (SYNTH and OUTRUN from 0.8.0). Each wallpaper starts in its reference's palette: the rain in PHOSPHOR, NEURAL NET and VELOCITY in BLOOD. DATA FLOW, with no reference, starts in ICE (cyan traces, violet ones and a violet glow); MEGACITY in NEON (its reference's blue haze and pink signs); HORIZON in SYNTH and SUNSET in OUTRUN, the palettes made for them.
 
 **Zoom is the web's** (user request, 2026-10-23: zoom in, and set any wallpaper's default zoom). Its steps are Chrome's, from 50% to 200%, and each wallpaper keeps its own.
 - **What a zoom does.** A wallpaper at zoom z is laid out for a screen 1/z as big and drawn z times as large: larger glyphs, nodes, traces and chips, and fewer of them.

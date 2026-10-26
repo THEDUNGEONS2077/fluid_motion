@@ -12,6 +12,10 @@ import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
 import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
 import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
 import com.thedungeons2077.fluidmotion.lib.flow.flowTones
+import com.thedungeons2077.fluidmotion.lib.horizon.HorizonDraw
+import com.thedungeons2077.fluidmotion.lib.horizon.HorizonView
+import com.thedungeons2077.fluidmotion.lib.horizon.Land
+import com.thedungeons2077.fluidmotion.lib.horizon.advanceCamera
 import com.thedungeons2077.fluidmotion.lib.megacity.CityFrame
 import com.thedungeons2077.fluidmotion.lib.megacity.CityLayout
 import com.thedungeons2077.fluidmotion.lib.megacity.CitySim
@@ -24,6 +28,8 @@ import com.thedungeons2077.fluidmotion.lib.rain.RainRecorder
 import com.thedungeons2077.fluidmotion.lib.rain.RainSim
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.rain.glyphSlots
+import com.thedungeons2077.fluidmotion.lib.sunset.SunsetView
+import com.thedungeons2077.fluidmotion.lib.sunset.advanceTravel
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityFrame
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityParams
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocitySim
@@ -55,6 +61,32 @@ class FrameAllocationTest {
         println("$name: $allocated bytes in 1000 frames (windows ${windows.joinToString()})")
         // Not a byte a frame: one object a frame would be 16 000 bytes, one per packet over 1500.
         assertTrue("$name allocated $allocated bytes in 1000 frames", allocated < 256)
+    }
+
+    @Test
+    fun horizon() {
+        val view = HorizonView(w * density, h * density, density, 1f)
+        val land = Land.build(Rng(6), view.cell, view.halfWidth)
+        var camZ = 0f
+        var sink = 0
+        weigh("horizon") {
+            // HorizonRenderer's frame: the camera on, then where the two draws of strips start.
+            camZ = advanceCamera(camZ, 1f / 30f, view.speed, land)
+            val near = HorizonDraw.nearStrip(camZ, land)
+            sink += HorizonDraw.farFirst(near, land)
+        }
+        assertTrue(sink != 0)
+    }
+
+    @Test
+    fun sunset() {
+        val view = SunsetView(w * density, h * density, density, 1f)
+        var travel = 0f
+        weigh("sunset") {
+            // SunsetRenderer's frame: the grid on (one number for the GPU).
+            travel = advanceTravel(travel, 1f / 30f, view.speed)
+        }
+        assertTrue(travel >= 0f)
     }
 
     @Test

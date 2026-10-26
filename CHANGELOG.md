@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 (build 11)
+Two new wallpapers from the dashboard, and their palettes.
+- **HORIZON:** a glowing wireframe land running to a hot pink horizon, the camera gliding forward over it. It has the web's 0.17.4 look: smooth, glowing edges and gentler hills. It starts in SYNTH.
+- **SUNSET:** the striped outrun sun over a glowing grid that glides toward you, under the stars, with no line at the horizon. It starts in OUTRUN. The GLOW setting doesn't change it (as on the web: the sun's glow is the reference's own).
+- **SYNTH and OUTRUN palettes,** for every wallpaper and the app's own colours.
+- **Made for a phone, light on the battery:**
+  - **Shaders:** the same shaders as the dashboard, byte for byte, with nothing extra on the phone.
+  - **Per frame:** one number changes (how far the camera or grid has come). Nothing is allocated.
+  - **No kept copy of the sky:** the sky is worked out again each frame. A phone's screen doesn't keep its last picture, and reading a kept copy back from memory every frame costs more battery than these few sums.
+  - **HORIZON without a depth buffer:** the land is drawn from the far end to the near, so no extra screen-sized buffer is written each frame. A triangle budget keeps it to about 17 000 quads at 100% (24 000 at most, zoomed out).
+  - **Framing an upright screen:** HORIZON's cells are made smaller, so you see as many across as on the web's 16:9. SUNSET's camera is raised a little, for bigger squares with a clear perspective. Both suns are sized by the screen's width.
+- **What to try:** AUTO CALIBRATE, then MEASURE IMPACT on each. I can't time the GPU here; those numbers will tell us whether either needs trimming.
+
 ## 0.7.1 (build 10)
 - **COPY BATTERY DATA** (in INSIGHT): copies everything about the wallpapers' battery use as one text to paste back while we tune them:
   - the phone, the app's version, the battery now;

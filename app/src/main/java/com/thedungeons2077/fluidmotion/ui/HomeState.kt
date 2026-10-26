@@ -51,8 +51,10 @@ import com.thedungeons2077.fluidmotion.settings.Calibrated
 import com.thedungeons2077.fluidmotion.settings.Settings
 import com.thedungeons2077.fluidmotion.wallpaper.DataFlowService
 import com.thedungeons2077.fluidmotion.wallpaper.MatrixRainService
+import com.thedungeons2077.fluidmotion.wallpaper.HorizonService
 import com.thedungeons2077.fluidmotion.wallpaper.MegacityService
 import com.thedungeons2077.fluidmotion.wallpaper.NeuralNetService
+import com.thedungeons2077.fluidmotion.wallpaper.SunsetService
 import com.thedungeons2077.fluidmotion.wallpaper.VelocityService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -578,5 +580,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         SceneKind.VELOCITY -> VelocityService::class.java
         SceneKind.DATA_FLOW -> DataFlowService::class.java
         SceneKind.MEGACITY -> MegacityService::class.java
+        SceneKind.HORIZON -> HorizonService::class.java
+        SceneKind.SUNSET -> SunsetService::class.java
     }
 }

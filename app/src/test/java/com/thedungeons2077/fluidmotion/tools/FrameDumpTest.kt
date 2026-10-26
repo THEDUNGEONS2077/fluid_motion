@@ -3,7 +3,8 @@
  * (an S25 Ultra at its default FHD+: 1080 × 2340 px, 2.8125 px per dp), to
  * app/build/shader-check/ (a JSON file per scene), for tools/shader-check to draw with the
  * real shader files in WebGL2. The numbers come from the same lib code the
- * renderers use (RainRecorder, NeuralFrame, VelocityFrame, FlowFrame, CityLayout and CityFrame), so the pictures
+ * renderers use (RainRecorder, NeuralFrame, VelocityFrame, FlowFrame, CityLayout and CityFrame, HorizonView and
+ * Land, SunsetView), so the pictures
  * show what the phone will draw.
  *
  * Not a check by itself (it asserts only that it wrote something): the
@@ -23,6 +24,11 @@ import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
 import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
 import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
 import com.thedungeons2077.fluidmotion.lib.flow.flowTones
+import com.thedungeons2077.fluidmotion.lib.horizon.HorizonParams
+import com.thedungeons2077.fluidmotion.lib.horizon.HorizonTones
+import com.thedungeons2077.fluidmotion.lib.horizon.HorizonView
+import com.thedungeons2077.fluidmotion.lib.horizon.Land
+import com.thedungeons2077.fluidmotion.lib.horizon.advanceCamera
 import com.thedungeons2077.fluidmotion.lib.megacity.CityFrame
 import com.thedungeons2077.fluidmotion.lib.megacity.CityLayout
 import com.thedungeons2077.fluidmotion.lib.megacity.CitySim
@@ -39,6 +45,10 @@ import com.thedungeons2077.fluidmotion.lib.rain.RainRecorder
 import com.thedungeons2077.fluidmotion.lib.rain.RainSim
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.rain.glyphSlots
+import com.thedungeons2077.fluidmotion.lib.sunset.SunsetParams
+import com.thedungeons2077.fluidmotion.lib.sunset.SunsetTones
+import com.thedungeons2077.fluidmotion.lib.sunset.SunsetView
+import com.thedungeons2077.fluidmotion.lib.sunset.advanceTravel
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityFrame
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityParams
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocitySim
@@ -318,5 +328,88 @@ class FrameDumpTest {
         File(out, name).writeText(json)
         assertTrue(city.signs.isNotEmpty() && ng > 0)
     }
-}
 
+    /** The target's size at a quality scale (gl/ScaledTarget.kt rounds the same way). */
+    private fun scaled(scale: Float) = if (scale >= 0.999f) intArrayOf(w, h) else intArrayOf(Math.round(w * scale), Math.round(h * scale))
+
+    @Test
+    fun `horizon as the phone draws it`() {
+        dumpHorizon(1f, "horizon.json")
+        // Zoomed in (150%): a narrower view, bigger cells.
+        dumpHorizon(1.5f, "horizon-zoom.json")
+    }
+
+    /** HORIZON at [zoom], to [name]: its land's triangles, the framing at full resolution and at LOW, eight seconds in. */
+    private fun dumpHorizon(zoom: Float, name: String) {
+        val p = HorizonParams
+        val tones = HorizonTones(Palettes.SYNTH.colors)
+        val glow = p.GLOW.getValue(GlowLevel.HIGH)
+        fun view(scale: Float): String {
+            val t = scaled(scale)
+            val v = HorizonView(t[0].toFloat(), t[1].toFloat(), density * scale * zoom, zoom)
+            return Json().ints("target", t).num("density", v.density).num("focal", v.focal).num("horizon", v.horizon)
+                .floats("sun", floatArrayOf(v.sunX, v.sunY)).num("glowR", v.short * p.SUN_GLOW * glow.sun)
+                .floats("dome", floatArrayOf(v.short * p.DOME_RX, v.short * p.DOME_RY)).num("coreR", v.short * p.SUN_CORE).done()
+        }
+        val full = HorizonView(w.toFloat(), h.toFloat(), density * zoom, zoom)
+        val land = Land.build(Rng(20261026), full.cell, full.halfWidth)
+        var camZ = 0f
+        repeat(8 * 30) { camZ = advanceCamera(camZ, 1f / 30f, full.speed, land) }
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("lowScale", Quality.LOW.scale(density))
+            .raw("full", view(1f)).raw("low", view(Quality.LOW.scale(density)))
+            .num("rows", land.rows).num("cols", land.cols).num("cell", land.cell).num("camZ", camZ)
+            .num("stripVertices", land.stripVertices).num("wallVertices", Land.WALL_VERTICES)
+            .num("camH", p.CAMERA_HEIGHT).num("near", p.NEAR).num("far", p.DEPTH + 3f)
+            .num("lineW", p.LINE_WIDTH).num("glowW", p.LINE_GLOW).num("glowA", glow.edge).num("softNear", p.LINE_NEAR).num("soften", p.LINE_SOFTEN)
+            .num("fogStart", p.FOG_START).num("fogEnd", p.FOG_END).num("horizonShare", p.HORIZON)
+            .raw(
+                "tones",
+                Json().floats("skyTop", tones.skyTop).floats("skyLow", tones.skyLow).floats("glow", tones.glow).floats("core", tones.core)
+                    .floats("line", tones.line).floats("face", tones.face).done(),
+            )
+            .floats("mesh", Land.mesh(land))
+            .done()
+        File(out, name).writeText(json)
+        assertTrue(land.rows > 0 && land.cols > 2)
+    }
+
+    @Test
+    fun `sunset as the phone draws it`() {
+        dumpSunset(1f, "sunset.json")
+        // Zoomed in (150%): a bigger sun, a narrower view of the grid.
+        dumpSunset(1.5f, "sunset-zoom.json")
+    }
+
+    /** SUNSET at [zoom], to [name]: the framing at full resolution and at LOW, eight seconds in. */
+    private fun dumpSunset(zoom: Float, name: String) {
+        val p = SunsetParams
+        val tones = SunsetTones(Palettes.OUTRUN.colors)
+        fun view(scale: Float): String {
+            val t = scaled(scale)
+            val v = SunsetView(t[0].toFloat(), t[1].toFloat(), density * scale * zoom, zoom)
+            return Json().ints("target", t).num("unit", v.pxPerDp).num("horizon", v.horizon).floats("sun", floatArrayOf(v.sunX, v.sunY))
+                .num("sunR", p.SUN_R * v.big).num("glowR", p.SUN_GLOW * v.big).num("focal", v.focal).num("camH", v.cameraHeight).num("melt", v.melt).done()
+        }
+        val full = SunsetView(w.toFloat(), h.toFloat(), density * zoom, zoom)
+        var travel = 0f
+        repeat(8 * 30) { travel = advanceTravel(travel, 1f / 30f, full.speed) }
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("lowScale", Quality.LOW.scale(density))
+            .raw("full", view(1f)).raw("low", view(Quality.LOW.scale(density)))
+            .num("travel", travel).num("horizonShare", p.HORIZON)
+            .num("scanEvery", p.SCAN_EVERY).num("scanDepth", p.SCAN_DEPTH)
+            .floats("stripe", floatArrayOf(p.STRIPE_FROM, p.STRIPE_PERIOD, p.GAP_FIRST)).num("gapGrow", p.GAP_LAST - p.GAP_FIRST)
+            .num("starCell", p.STAR_CELL).num("starChance", p.STAR_CHANCE).num("line", p.LINE).num("glowW", p.LINE_GLOW)
+            .floats("wave", floatArrayOf(p.WAVE_AMOUNT, p.WAVE_K * p.WAVE_ACROSS, p.WAVE_K * p.WAVE_ALONG)).num("drift", p.WAVE_K * 5f)
+            .raw(
+                "tones",
+                Json().floats("skyLeft", tones.skyLeft).floats("skyRight", tones.skyRight).floats("skyTop", tones.skyTop).floats("sunTop", tones.sunTop)
+                    .floats("sunBase", tones.sunBase).floats("glow", tones.glow).floats("star", tones.star).floats("ground", tones.ground)
+                    .floats("warm", tones.warm).floats("cool", tones.coolLine).done(),
+            )
+            .done()
+        File(out, name).writeText(json)
+        assertTrue(travel > 0f)
+    }
+}

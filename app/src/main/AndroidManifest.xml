@@ -83,5 +83,27 @@
             </intent-filter>
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_megacity" />
         </service>
+
+        <service
+            android:name=".wallpaper.HorizonService"
+            android:exported="true"
+            android:label="@string/horizon_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_horizon" />
+        </service>
+
+        <service
+            android:name=".wallpaper.SunsetService"
+            android:exported="true"
+            android:label="@string/sunset_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_sunset" />
+        </service>
     </application>
 </manifest>

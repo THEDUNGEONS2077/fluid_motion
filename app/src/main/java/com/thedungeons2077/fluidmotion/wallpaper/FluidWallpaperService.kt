@@ -142,3 +142,13 @@ class DataFlowService : FluidWallpaperService() {
 class MegacityService : FluidWallpaperService() {
     override val kind = SceneKind.MEGACITY
 }
+
+/** HORIZON. */
+class HorizonService : FluidWallpaperService() {
+    override val kind = SceneKind.HORIZON
+}
+
+/** SUNSET. */
+class SunsetService : FluidWallpaperService() {
+    override val kind = SceneKind.SUNSET
+}
