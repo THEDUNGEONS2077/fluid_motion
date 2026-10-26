@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 (build 12)
+- **MATRIX RAIN is one smooth gradient,** greenest at the top and black at the bottom, with no line across the screen (the same fix as the dashboard's 0.17.6).
+  - **Why there was a line:** the dark floor covered only the bottom 16%, so the point where it started showed as a straight edge. The green haze also had corners about half and 95% of the way down.
+  - **Now:** both follow smooth curves over the whole height, worked out exactly per pixel. It costs nothing extra: the same single pass, no new reads.
+
 ## 0.8.0 (build 11)
 Two new wallpapers from the dashboard, and their palettes.
 - **HORIZON:** a glowing wireframe land running to a hot pink horizon, the camera gliding forward over it. It has the web's 0.17.4 look: smooth, glowing edges and gentler hills. It starts in SYNTH.

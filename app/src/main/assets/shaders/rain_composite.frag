@@ -18,17 +18,16 @@ highp float noise(highp vec2 p) {
 }
 
 void main() {
-    // The haze (.wallpaper-haze): an ellipse (120% × 60% of the screen, at 50% 10%) of
-    // accent at 5% fading out by 70% of its size, over accent at 5% down to 55% fading
-    // out by 95%; the layer at 60% opacity.
-    vec2 d = (vPos - vec2(0.5, 0.1)) / vec2(1.2, 0.6);
-    float a1 = 0.05 * max(0.0, 1.0 - length(d) / 0.7);
-    float a2 = 0.05 * (1.0 - clamp((vPos.y - 0.55) / 0.4, 0.0, 1.0));
-    vec3 under = mix(uBg, uAccent, 0.6 * (a1 + a2 * (1.0 - a1)));
+    // The haze (.wallpaper-haze, 0.8.1 / the web's 0.17.6): one smooth curve down the whole
+    // height, (1 + cos πt) / 2 of accent at 7%: greenest at the top, gone at the bottom, flat
+    // at both ends, no corner anywhere (its old stops at 55% and 95% read as lines).
+    vec3 under = mix(uBg, uAccent, 0.035 * (1.0 + cos(3.14159265 * vPos.y)));
     // The rain over it.
     vec4 r = texture(uRain, vec2(vPos.x, 1.0 - vPos.y));
     vec3 c = r.rgb + under * (1.0 - r.a);
-    // The floor (.wallpaper-floor): the bottom 16% fades to the background.
-    c = mix(c, uBg, clamp((vPos.y - 0.84) / 0.16, 0.0, 1.0));
+    // The floor (.wallpaper-floor, likewise): along t³ over the whole height, nothing at the
+    // top, easing in, the background at the bottom edge (the bottom 16% alone showed its start
+    // as a straight line across the screen).
+    c = mix(c, uBg, vPos.y * vPos.y * vPos.y);
     fragColor = vec4(c + (noise(gl_FragCoord.xy) - 0.5) / 255.0, 1.0);
 }
