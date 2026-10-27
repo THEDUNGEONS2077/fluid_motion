@@ -105,6 +105,34 @@ The objective is no hit to battery or performance. How it's met:
 - **Settings.** The wallpapers run in the app's process, so a change in the app reaches a running wallpaper at once through a SharedPreferences listener. The engine holds that listener, because SharedPreferences keeps listeners only weakly.
 - **Failures.** A scene that can't be built on a GPU (a driver refusing a shader) is drawn black and reported in STATUS; the wallpaper doesn't crash.
 
+## Measurements (the user's S25 Ultra)
+Each release that could change the cost is measured on the phone by the user (AUTO CALIBRATE, MEASURE IMPACT, COPY BATTERY DATA) and recorded here, so tuning starts from history. MEASURE IMPACT reports the extra current over the wallpaper still (STILL), with the screen and everything else the same in every step.
+
+- **0.2.0: where the cost is.** A frame costs about 1 ms of CPU and 1–1.7 ms of GPU at every rate. The extra current is BALANCED +8 to +47 mA (0.2–0.9% an hour) and SMOOTH +54 to +87 mA (1.1–1.7% an hour), the rain costing most. ECO at 20 fps cost as much as BALANCED, because the display has no 20 Hz mode and stayed at 60. **The refresh rate is the main cost**, which is why ECO became the display's own 24 (0.2.1).
+- **0.3.0: AUTO CALIBRATE.** ULTRA for all three wallpapers of the time. GPU ms at LOW / MEDIUM / HIGH (= ULTRA at FHD+):
+  - rain: 0.86 / 1.10 / 1.34;
+  - neural: 0.75 / 1.26 / 1.33;
+  - velocity: 0.82 / 1.36 / 1.55.
+
+  MEDIUM saves little, because the scale-up pass costs most of what drawing smaller saves.
+- **0.5.0.**
+  - **GPU ms at ULTRA:** rain 1.35, neural 0.90, velocity 2.24, DATA FLOW 0.93.
+  - **DATA FLOW's MEASURE IMPACT:** BALANCED +53 mA, SMOOTH +160 mA (battery saver on). The user said not to worry about ECO.
+- **0.6.1** (battery saver on, STILL 123 mA).
+  - **GPU ms at ULTRA:** rain 1.34, neural 1.11, velocity 2.02, flow 0.89, MEGACITY 5.09. AUTO CALIBRATE picked LOW for MEGACITY (1.84 ms).
+  - **MEASURE IMPACT, ECO / BALANCED / SMOOTH:**
+
+    | Wallpaper (palette, glow) | ECO | BALANCED | SMOOTH |
+    |---|---|---|---|
+    | MEGACITY (AMBER, MAX) | +36 | +46 | +122 mA |
+    | VELOCITY (BLOOD) | +25 | +16 | +56 mA |
+    | RAIN (PHOSPHOR, LOW) | +36 | +40 | +109 mA |
+- **0.7.0: MEGACITY's cache.**
+  - **GPU:** 5.09 → **0.93 ms** at ULTRA, and AUTO CALIBRATE now picks ULTRA.
+  - **MEASURE IMPACT:** +32 / +30 / +71 mA (−35% at BALANCED, −42% at SMOOTH).
+  - **Heaviest now:** VELOCITY (2.08 ms) and the rain (1.49 ms). VELOCITY is light on the battery all the same (+16 mA at BALANCED), so it was left as it is.
+- **0.8.x: HORIZON and SUNSET** wait for their first AUTO CALIBRATE and MEASURE IMPACT (F6), along with a week of COPY BATTERY DATA. Here, HORIZON's land is about 17 000 quads (104 000 vertices) at 100%, and SUNSET is two full-screen passes with no geometry.
+
 ## Verifying (no phone here)
 - **Unit tests** (`lib`):
   - the palettes' contrast and the power rules;
