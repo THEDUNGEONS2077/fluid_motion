@@ -5,10 +5,11 @@
  *
  * Layer: lib (pure Kotlin). The scene is built once per screen size: node
  * homes (an even scatter plus loose clusters, past the screen's edges so
- * links run off it), links to near neighbours (a few hubs to many), and
- * out-of-focus particles (bokeh). [advance] moves it on: each node drifts on
- * a slow loop round its home, the bokeh rise, and now and then a signal runs
- * along a few links and lights each node it reaches. The renderer
+ * links run off it) and links to near neighbours (a few hubs to many).
+ * [advance] moves it on: each node drifts on a slow loop round its home,
+ * and now and then a signal runs along a few links and lights each node it
+ * reaches. There are no out-of-focus particles (bokeh) behind the net: the
+ * user had them removed (0.9.0), on the web too. The renderer
  * (wallpaper/neural/NeuralRenderer.kt) draws it; colours come from the
  * palette along a diagonal ([shade]).
  *
@@ -27,7 +28,6 @@ import com.thedungeons2077.fluidmotion.lib.mixRgb
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.rain.Span
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -69,11 +69,6 @@ object NeuralParams {
     val LINK_WEIGHT = Span(0.35f, 1.6f)
     /** A link's width (dp). */
     const val LINE_WIDTH = 0.9f
-    /** Bokeh on one screen, radius (dp), opacity and rising speed (dp/s). */
-    const val BOKEH_PER_SCREEN = 30f
-    val BOKEH_RADIUS = Span(4f, 24f)
-    val BOKEH_ALPHA = Span(0.05f, 0.3f)
-    val BOKEH_SPEED = Span(2f, 9f)
     /** Signals: new ones a second, speed (dp/s), links they run, and how a reached node lights (rise, fade; s). */
     const val PULSES_PER_SECOND = 1.1f
     val PULSE_SPEED = Span(240f, 460f)
@@ -172,15 +167,6 @@ class NeuralSim(val w: Float, val h: Float, private val rng: Rng, zoom: Float = 
     /** Each node's links (indexes into the pair list). */
     private val linksOf: Array<IntArray>
 
-    /** Bokeh: place, radius, opacity, velocity. */
-    val nb: Int
-    val bx: FloatArray
-    val by: FloatArray
-    val br: FloatArray
-    val ba: FloatArray
-    private val bvx: FloatArray
-    private val bvy: FloatArray
-
     /** Signals in flight (a fixed pool): link, from which node, how far along (0–1), speed (share of the link a second), links left. */
     val pulseLink = IntArray(NeuralParams.MAX_PULSES)
     val pulseFrom = IntArray(NeuralParams.MAX_PULSES)
@@ -237,19 +223,6 @@ class NeuralSim(val w: Float, val h: Float, private val rng: Rng, zoom: Float = 
             lists[links[2 * k + 1]].add(k)
         }
         linksOf = Array(n) { lists[it].toIntArray() }
-        nb = (p.BOKEH_PER_SCREEN / (zoom * zoom)).roundToInt().coerceIn(4, NeuralFrame.MAX_BOKEH)
-        bx = FloatArray(nb); by = FloatArray(nb); br = FloatArray(nb); ba = FloatArray(nb); bvx = FloatArray(nb); bvy = FloatArray(nb)
-        for (i in 0 until nb) {
-            bx[i] = rng.next() * w
-            by[i] = rng.next() * h
-            br[i] = rng.between(p.BOKEH_RADIUS)
-            ba[i] = rng.between(p.BOKEH_ALPHA)
-            // Rising, a little sideways, like dust in warm air.
-            val speed = rng.between(p.BOKEH_SPEED)
-            val angle = (-PI / 2 + (rng.next() - 0.5) * 1.6).toFloat()
-            bvx[i] = cos(angle) * speed
-            bvy[i] = sin(angle) * speed
-        }
     }
 
     /** Moves everything on by [dt] seconds. */
@@ -268,12 +241,6 @@ class NeuralSim(val w: Float, val h: Float, private val rng: Rng, zoom: Float = 
             } else {
                 flash[i] = maxOf(0f, flash[i] - dt / p.FLASH_SECONDS)
             }
-        }
-        // Bokeh drift, wrapping round the screen.
-        for (i in 0 until nb) {
-            val r = br[i]
-            bx[i] = wrap(bx[i] + bvx[i] * dt, -r, w + r)
-            by[i] = wrap(by[i] + bvy[i] * dt, -r, h + r)
         }
         // New signals, from a random node with links.
         pulseDebt += p.PULSES_PER_SECOND * dt
@@ -332,14 +299,6 @@ class NeuralSim(val w: Float, val h: Float, private val rng: Rng, zoom: Float = 
                 pulseSpeed[i] = pulseSpeed[pulses]; pulseHops[i] = pulseHops[pulses]; pulseFirst[i] = pulseFirst[pulses]
             }
         }
-    }
-
-    /** [v] wrapped into [lo, hi). */
-    private fun wrap(v: Float, lo: Float, hi: Float): Float {
-        val span = hi - lo
-        var u = (v - lo) % span
-        if (u < 0) u += span
-        return lo + u
     }
 
     /** Where signal [i] is now (dp): x, then y. */

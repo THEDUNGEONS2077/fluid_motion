@@ -167,13 +167,11 @@ class FrameDumpTest {
         repeat(12 * 30) { sim.advance(1f / 30f) }
         val nodes = FloatArray(NeuralFrame.MAX_NODES * 2)
         val sparks = FloatArray(NeuralFrame.MAX_SPARKS * 4)
-        val bokeh = FloatArray(NeuralFrame.MAX_BOKEH * 4)
         val pairs = NeuralFrame.nodes(sim, nodes)
         val ns = NeuralFrame.sparks(sim, glow.haloSize, px, sparks)
         // At LOW the sprites are sized for its px per dp (a whole number of its px).
         val sparksLow = FloatArray(NeuralFrame.MAX_SPARKS * 4)
         NeuralFrame.sparks(sim, glow.haloSize, pxLow, sparksLow)
-        val nb = NeuralFrame.bokeh(sim, bokeh)
         val links = FloatArray(sim.links.size / 2 * 3) { i -> if (i % 3 == 2) sim.weight[i / 3] else sim.links[2 * (i / 3) + i % 3].toFloat() }
         val json = Json()
             .ints("screen", intArrayOf(w, h)).num("density", px).floats("dp", floatArrayOf(sim.w, sim.h))
@@ -183,7 +181,7 @@ class FrameDumpTest {
             .num("lineWidth", NeuralParams.LINE_WIDTH).num("glowWidth", NeuralFrame.GLOW_WIDTH).num("maxLink", sim.maxLink)
             .num("edge", 1f / NeuralFrame.spriteScale(glow.haloSize, px))
             .num("edgeLow", 1f / NeuralFrame.spriteScale(glow.haloSize, pxLow))
-            .floats("links", links).floats("nodes", nodes, pairs * 4).floats("bokeh", bokeh, nb * 4).floats("sparks", sparks, ns * 4).floats("sparksLow", sparksLow, ns * 4)
+            .floats("links", links).floats("nodes", nodes, pairs * 4).floats("sparks", sparks, ns * 4).floats("sparksLow", sparksLow, ns * 4)
             .done()
         File(out, name).writeText(json)
         assertTrue(ns > 0)

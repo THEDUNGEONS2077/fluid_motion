@@ -48,9 +48,7 @@ class ZoomTest {
         val at200 = NeuralSim(w / 2, h / 2, Rng(1), 2f)
         val at50 = NeuralSim(w * 2, h * 2, Rng(1), 0.5f)
         assertEquals(at100 / 4f, at200.n.toFloat(), 1f)
-        assertTrue(at200.nb in 4..at100)
         assertEquals(NeuralFrame.MAX_NODES, at50.n)
-        assertTrue(at50.nb <= NeuralFrame.MAX_BOKEH)
     }
 
     @Test

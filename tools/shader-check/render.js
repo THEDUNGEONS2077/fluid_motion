@@ -331,7 +331,6 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     const px = d.density * (low ? d.lowScale : 1);
     const sparks = low ? d.sparksLow : d.sparks;
     const bg = program('fullscreen.vert', 'neural_bg.frag');
-    const bokeh = program('neural_bokeh.vert', 'neural_bokeh.frag');
     const link = program('neural_link.vert', 'neural_link.frag');
     const spark = program('neural_spark.vert', 'neural_spark.frag');
     // sendLinks: node a, node b, weight.
@@ -350,7 +349,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     set3(bg.u('uBg'), c.bg);
     set3(bg.u('uCool'), c.cool);
     set3(bg.u('uAccent'), c.accent);
-    for (const p of [bokeh, link, spark]) {
+    for (const p of [link, spark]) {
       p.use();
       gl.uniform2f(p.u('uTargetPx'), t.width, t.height);
       gl.uniform1f(p.u('uDensity'), px);
@@ -372,9 +371,6 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     fullScreen();
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    bokeh.use();
-    gl.uniform4fv(bokeh.u('uBokeh'), new Float32Array(d.bokeh));
-    quads(d.bokeh.length / 4);
     link.use();
     gl.uniform4fv(link.u('uNodes'), new Float32Array(d.nodes));
     gl.bindVertexArray(linkVao);
@@ -391,7 +387,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform4fv(spark.u('uSparks'), new Float32Array(sparks));
     quads(sparks.length / 4);
     t.end();
-    snapshot(name, `${low ? `LOW: drawn ${t.width}×${t.height}, no link glow; ` : ''}${d.nodes.length / 2} nodes, ${linkCount} links, ${sparks.length / 4} sparks, ${d.bokeh.length / 4} bokeh;`);
+    snapshot(name, `${low ? `LOW: drawn ${t.width}×${t.height}, no link glow; ` : ''}${d.nodes.length / 2} nodes, ${linkCount} links, ${sparks.length / 4} sparks`);
   }
 
   // --- VELOCITY (scene/velocity/VelocityRenderer.kt) ------------------------------------

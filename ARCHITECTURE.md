@@ -24,7 +24,7 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
      - **Drawing.** Records and fades go into the persistent *trail layer* (an RGBA8 texture), in the simulation's order, with one blend: premultiplied over, where a fade or erase is black with alpha, which is the web's destination-out.
      - **Composite.** A full-screen pass puts the trail layer over the haze and under the floor.
      - **Atlas.** The glyphs come from an atlas drawn once by Android Canvas: R is the core, G the head glow, B the body glow, A the erase shape. Colours are applied in the shader, so a palette change needs no new atlas.
-   - **NEURAL NET.** One pass and five draw calls: the background, bokeh, links (a glow pass, then the thin pass), then nodes and signals.
+   - **NEURAL NET.** One pass and four draw calls: the background, links (a glow pass, then the thin pass), then nodes and signals.
      - **Uniforms.** Positions go up as small uniform arrays; the links are a static buffer sent once per screen.
      - **Colour.** Colour along the diagonal is worked out in the vertex shaders.
    - **VELOCITY.** One pass.

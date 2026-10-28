@@ -142,10 +142,8 @@ class FrameAllocationTest {
         val g = NeuralParams.GLOW.getValue(GlowLevel.HIGH)
         val nodes = FloatArray(NeuralFrame.MAX_NODES * 2)
         val sparks = FloatArray(NeuralFrame.MAX_SPARKS * 4)
-        val bokeh = FloatArray(NeuralFrame.MAX_BOKEH * 4)
         weigh("neural") {
             sim.advance(1f / 30f)
-            NeuralFrame.bokeh(sim, bokeh)
             NeuralFrame.nodes(sim, nodes)
             NeuralFrame.sparks(sim, g.haloSize, density, sparks)
         }

@@ -62,10 +62,6 @@ class NeuralSimTest {
                 assertTrue("drift x", kotlin.math.abs(s.x[i] - s.hx[i]) <= 38f + 1e-3f)
                 assertTrue("drift y", kotlin.math.abs(s.y[i] - s.hy[i]) <= 38f + 1e-3f)
             }
-            for (i in 0 until s.nb) {
-                assertTrue(s.bx[i] >= -s.br[i] && s.bx[i] <= s.w + s.br[i])
-                assertTrue(s.by[i] >= -s.br[i] && s.by[i] <= s.h + s.br[i])
-            }
             for (i in 0 until s.pulses) {
                 assertTrue(s.pulseAlong[i] in 0f..1f)
                 // A signal is on its link: between its two nodes.

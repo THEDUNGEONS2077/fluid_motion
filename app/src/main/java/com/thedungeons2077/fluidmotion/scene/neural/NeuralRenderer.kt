@@ -1,12 +1,11 @@
 /*
  * scene/neural/NeuralRenderer.kt: NEURAL NET on the GPU: the plexus from
- * lib/neural/NeuralSim.kt, drawn as the web draws it (bokeh, then links in
- * a soft wide pass and a thin one, then nodes and signals), over its
- * background light.
+ * lib/neural/NeuralSim.kt, drawn as the web draws it (links in a soft wide
+ * pass and a thin one, then nodes and signals), over its background light.
  *
- * Layer: scene (GL). One pass straight to the screen, five draw calls. Per
- * frame the CPU only writes positions into three small uniform arrays
- * (nodes, sparks, bokeh); the links, which never change on a screen, are
+ * Layer: scene (GL). One pass straight to the screen, four draw calls. Per
+ * frame the CPU only writes positions into two small uniform arrays
+ * (nodes, sparks); the links, which never change on a screen, are
  * sent once. Colours along the diagonal are worked out in the vertex
  * shaders (neural_shade.glsl), so a palette change is four uniforms.
  *
@@ -39,7 +38,6 @@ import kotlin.math.min
 /** The neural net scene. */
 class NeuralRenderer(context: Context) : Scene {
     private val bg = GlProgram(context.assets, "fullscreen.vert", "neural_bg.frag")
-    private val bokeh = GlProgram(context.assets, "neural_bokeh.vert", "neural_bokeh.frag")
     private val link = GlProgram(context.assets, "neural_link.vert", "neural_link.frag")
     private val spark = GlProgram(context.assets, "neural_spark.vert", "neural_spark.frag")
     private val empty = EmptyVao()
@@ -65,7 +63,6 @@ class NeuralRenderer(context: Context) : Scene {
     // Per-frame uniform arrays, made once.
     private val nodes = FloatArray(NeuralFrame.MAX_NODES * 2)
     private val sparks = FloatArray(NeuralFrame.MAX_SPARKS * 4)
-    private val bokehs = FloatArray(NeuralFrame.MAX_BOKEH * 4)
 
     // Uniforms that change only with the screen, palette or glow.
     private var dirty = true
@@ -80,14 +77,14 @@ class NeuralRenderer(context: Context) : Scene {
 
     /**
      * A new net for the screen at the zoom: laid out for a screen 1/zoom as
-     * big (dp), with its nodes and bokeh for the area that shows (NeuralSim).
+     * big (dp), with its nodes for the area that shows (NeuralSim).
      */
     private fun build() {
         layoutDirty = false
         val dp = density * zoom
         val s = NeuralSim(screenW / dp, screenH / dp, Rng(System.nanoTime().toInt()), zoom)
         sim = s
-        check(s.n <= NeuralFrame.MAX_NODES && s.nb <= NeuralFrame.MAX_BOKEH) { "scene larger than the shaders' arrays" }
+        check(s.n <= NeuralFrame.MAX_NODES) { "scene larger than the shaders' arrays" }
         sendLinks(s)
         dirty = true
         targetDirty = true
@@ -138,13 +135,7 @@ class NeuralRenderer(context: Context) : Scene {
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)
 
-        // 2. Bokeh, behind everything.
-        val nb = NeuralFrame.bokeh(s, bokehs)
-        bokeh.use()
-        GLES30.glUniform4fv(bokeh.u("uBokeh"), nb, bokehs, 0)
-        empty.drawQuads(nb)
-
-        // 3. Links: a soft wide pass (the glow), then the thin lines.
+        // 2. Links: a soft wide pass (the glow), then the thin lines.
         val pairs = NeuralFrame.nodes(s, nodes)
         link.use()
         GLES30.glUniform4fv(link.u("uNodes"), pairs, nodes, 0)
@@ -159,7 +150,7 @@ class NeuralRenderer(context: Context) : Scene {
         GLES30.glDrawArraysInstanced(GLES30.GL_TRIANGLE_STRIP, 0, 4, linkCount)
         GLES30.glBindVertexArray(0)
 
-        // 4. Nodes (bigger and brighter while lit), then the signals.
+        // 3. Nodes (bigger and brighter while lit), then the signals.
         val k = NeuralFrame.sparks(s, g.haloSize, pxPerDp, sparks)
         spark.use()
         GLES30.glUniform4fv(spark.u("uSparks"), k, sparks, 0)
@@ -176,7 +167,7 @@ class NeuralRenderer(context: Context) : Scene {
         uniformRgb(bg.u("uBg"), colors.bg)
         uniformRgb(bg.u("uCool"), colors.cool)
         uniformRgb(bg.u("uAccent"), colors.accent)
-        for (p in listOf(bokeh, link, spark)) {
+        for (p in listOf(link, spark)) {
             p.use()
             GLES30.glUniform2f(p.u("uTargetPx"), target.width.toFloat(), target.height.toFloat())
             GLES30.glUniform1f(p.u("uDensity"), pxPerDp)
@@ -219,7 +210,6 @@ class NeuralRenderer(context: Context) : Scene {
         target.release()
         empty.release()
         bg.release()
-        bokeh.release()
         link.release()
         spark.release()
         sim = null

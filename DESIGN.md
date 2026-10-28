@@ -9,7 +9,7 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 | | On the web | On the phone | Why |
 |---|---|---|---|
 | MATRIX RAIN | Glyphs at 1–2 px per CSS px | At the screen's density, up to 3 px per dp | Crisp at 2.8 px per dp. The look is otherwise the web's: brightness by eighths of the screen matches within the frame-to-frame noise |
-| NEURAL NET | 26 nodes per million px² | 64 nodes and 30 bokeh per screen | At the web's density a portrait phone shows only about 20 nodes |
+| NEURAL NET | 26 nodes per million px² | 64 nodes per screen | At the web's density a portrait phone shows only about 20 nodes |
 | VELOCITY sizes | Shares of the width | Shares of a base length, ¾ of the screen's longer side | Shares of a narrow width made thin slivers |
 | VELOCITY slant | Lean as a share of the width | Lean as a share of a 16:9 width at the screen's height | The panels keep the reference's angle |
 | VELOCITY flare | Placed by width and height | Placed from the bottom-right corner in base lengths | The web's arc ends mid-screen on a portrait screen; here both ends stay off the screen |
@@ -49,8 +49,9 @@ Each one is the web's (cyberdeck_terminal DESIGN.md has its reference and how it
 - **Since 0.8.1** both curves span the whole screen with no corners. The floor's old start at 84% and the haze's corners read as lines (the user: "a seamless and smooth gradient from black bottom to greenest top").
 - **GLOW** sets the glyphs' glow, as on the web.
 
-**NEURAL NET** (BLOOD). A plexus: glowing nodes joined by long thin links, soft bokeh, a deep teal sky and a red glow rising from the bottom right. Signals run along links about once a second.
-- **Counts:** set per screen (64 nodes, 30 bokeh), not per area, so a tall phone isn't sparse.
+**NEURAL NET** (BLOOD). A plexus: glowing nodes joined by long thin links, a deep teal sky and a red glow rising from the bottom right. Signals run along links about once a second.
+- **Counts:** set per screen (64 nodes), not per area, so a tall phone isn't sparse.
+- **No bokeh:** the reference's soft out-of-focus discs drifting behind the net were removed at the user's request (0.9.0, the web's 0.19.0 too).
 - **GLOW:** sets the halos and the links' soft second pass (dropped at LOW quality).
 
 **VELOCITY** (BLOOD). Light caught in motion: a big pale panel and dark red panels leaning left, drifting across, streaks racing, fine lines flickering, a breathing blue flare in the corner. All of it is additive light over a near-black background.

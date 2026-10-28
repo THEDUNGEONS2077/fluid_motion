@@ -16,7 +16,6 @@ object NeuralFrame {
     /** The shaders' array sizes (neural_*.vert declare the same). */
     const val MAX_NODES = 128
     const val MAX_SPARKS = 160
-    const val MAX_BOKEH = 32
 
     /** A link's glow pass is this many times as wide as the link. */
     const val GLOW_WIDTH = 4f
@@ -31,17 +30,6 @@ object NeuralFrame {
     fun spriteScale(haloSize: Float, density: Float): Float {
         val core = ceil(4f * density)
         return ceil(core * haloSize) / core
-    }
-
-    /** Bokeh as vec4s (x, y, radius, opacity): returns how many. */
-    fun bokeh(s: NeuralSim, out: FloatArray): Int {
-        for (i in 0 until s.nb) {
-            out[4 * i] = s.bx[i]
-            out[4 * i + 1] = s.by[i]
-            out[4 * i + 2] = s.br[i]
-            out[4 * i + 3] = s.ba[i]
-        }
-        return s.nb
     }
 
     /** Node positions, two a vec4: returns how many vec4s. */
