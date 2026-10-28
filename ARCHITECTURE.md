@@ -94,7 +94,7 @@ The objective is no hit to battery or performance. How it's met:
   - **The summary** (0.11.0, the user: a summary and recommended manual settings after calibrating; `lib/CalibrationSummary.kt`, `CalibrationSummaryTest`). From the samples: AUTO's pick per wallpaper and its cost, then three ways to set MANUAL (one rate and quality for all), each with the battery an hour on screen (CostModel), the GPU's busiest share for the heaviest wallpaper, and which wallpapers go over budget, and a USE button:
     - **LONGEST BATTERY:** ECO, LOW.
     - **RECOMMENDED:** BALANCED, at the sharpest quality every wallpaper draws within budget, leaving out those over it even at LOW (named).
-    - **SMOOTHEST:** SMOOTH, at the sharpest quality every wallpaper draws in under half a 60 fps frame (8.3 ms).
+    - **SMOOTHEST:** SMOOTH, at the sharpest quality every wallpaper draws in three quarters of a 60 fps frame (12.5 ms; the S25 Ultra's PRISM at ULTRA, 11.8 ms, held 60 fps with no late frames).
     The settings' CALIBRATION section shows it, and opens by itself when a calibration finishes.
 
 ## INSIGHT

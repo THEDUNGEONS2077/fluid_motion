@@ -56,8 +56,13 @@ object CalibrationSummary {
     /** The summary. */
     data class Summary(val picks: List<Pick>, val presets: List<Preset>, val recommended: Preset, val heavy: List<String>)
 
-    /** A frame must leave the GPU and CPU this much of a 60 fps frame (ms) for SMOOTHEST to pick a quality: half of it, so 60 fps holds. */
-    const val SMOOTH_FRAME_MS = 1000f / 60f / 2f
+    /**
+     * The most a frame may take (ms, GPU and CPU each) for SMOOTHEST to pick
+     * a quality: three quarters of a 60 fps frame, so 60 fps holds with room
+     * to spare. (The S25 Ultra's PRISM at ULTRA, 10–11.8 ms, held 60 fps
+     * with no late frames, 0.10.0.)
+     */
+    const val SMOOTH_FRAME_MS = 1000f / 60f * 0.75f
 
     /**
      * The summary for [measured] wallpapers on a display with [refreshRates],
@@ -74,7 +79,7 @@ object CalibrationSummary {
         val light = measured - heavy.toSet()
         // None fits anywhere (a weak phone): the cheapest, not the sharpest (every one of none fits trivially).
         val recommendedQ = if (light.isEmpty()) Quality.LOW else Quality.entries.lastOrNull { q -> light.all { it.at(q)?.within != false } } ?: Quality.LOW
-        // SMOOTHEST: the sharpest quality every wallpaper draws in under half a 60 fps frame.
+        // SMOOTHEST: the sharpest quality every wallpaper draws in three quarters of a 60 fps frame.
         val smoothQ = Quality.entries.lastOrNull { q ->
             measured.all { m -> m.at(q)?.let { (it.gpuMs.isNaN() || it.gpuMs <= SMOOTH_FRAME_MS) && it.cpuMs <= SMOOTH_FRAME_MS } != false }
         } ?: Quality.LOW

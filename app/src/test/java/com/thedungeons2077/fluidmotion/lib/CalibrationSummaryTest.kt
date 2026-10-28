@@ -52,9 +52,12 @@ class CalibrationSummaryTest {
         // ECO is the display's own slow rate.
         assertEquals(24, battery.fps)
         assertTrue(battery.meanMa < recommended.meanMa && recommended.meanMa < smooth.meanMa)
-        // PRISM's MEDIUM (7.85 ms) fits in half a 60 fps frame (8.3 ms); its HIGH (11.76) doesn't.
-        assertEquals(PowerProfile.SMOOTH to Quality.MEDIUM, smooth.profile to smooth.quality)
+        // PRISM's ULTRA (11.76 ms) fits in three quarters of a 60 fps frame (12.5 ms): it held 60 fps on this phone.
+        assertEquals(PowerProfile.SMOOTH to Quality.ULTRA, smooth.profile to smooth.quality)
         assertEquals(60, smooth.fps)
+        // A phone where it's slower: SMOOTHEST steps down to what holds 60 fps.
+        val slower = s25.map { if (it.id == "prism") m("prism", 4f, 9f, 14f, 14f) else it }
+        assertEquals(Quality.MEDIUM, CalibrationSummary.of(slower, rates, model).presets[2].quality)
     }
 
     @Test
