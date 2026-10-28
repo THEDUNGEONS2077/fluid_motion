@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -173,6 +174,41 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(DeckSize.sm))
         Box(Modifier.weight(1f).height(DeckSize.hairline).background(Brush.horizontalGradient(listOf(d.accent35, Color.Transparent))))
     }
+}
+
+/**
+ * A section of the settings that folds (0.11.0, the user: every section
+ * collapsible, closed to start): its title as a button (▸ closed, ▾ open),
+ * [value] beside it (what's chosen inside, so a closed section still says),
+ * and the lit rule; [content] under it only while [open]. A heading and an
+ * expandable button to accessibility services.
+ */
+@Composable
+fun Section(title: String, value: String, open: Boolean, onToggle: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val d = LocalDeck.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = DeckSize.control)
+            .clickable(role = Role.Button, onClickLabel = if (open) "close" else "open", onClick = onToggle)
+            .semantics(mergeDescendants = true) {
+                heading()
+                stateDescription = if (open) "open" else "closed"
+            }
+            .padding(top = DeckSize.sm, bottom = DeckSize.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DeckText(if (open) "▾" else "▸", DeckType.section, d.accent)
+        Spacer(Modifier.width(DeckSize.sm))
+        DeckText(title, DeckType.section, d.textBright)
+        Spacer(Modifier.width(DeckSize.sm))
+        Box(Modifier.weight(1f).height(DeckSize.hairline).background(Brush.horizontalGradient(listOf(d.accent35, Color.Transparent))))
+        if (value.isNotEmpty()) {
+            Spacer(Modifier.width(DeckSize.sm))
+            DeckText(value, DeckType.small, d.textDim)
+        }
+    }
+    if (open) Column(Modifier.fillMaxWidth().padding(bottom = DeckSize.sm), content = content)
 }
 
 /** A row of choices with one lit (the dashboard's .segmented): radio buttons to accessibility services. */

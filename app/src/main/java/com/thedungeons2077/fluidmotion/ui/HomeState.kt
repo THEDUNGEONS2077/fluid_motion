@@ -30,6 +30,7 @@ import com.thedungeons2077.fluidmotion.BuildConfig
 import com.thedungeons2077.fluidmotion.lib.BatteryData
 import com.thedungeons2077.fluidmotion.lib.BatteryExport
 import com.thedungeons2077.fluidmotion.lib.Calibration
+import com.thedungeons2077.fluidmotion.lib.CalibrationSummary
 import com.thedungeons2077.fluidmotion.lib.CostModel
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.Impact
@@ -126,6 +127,40 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         private set
     var runNote by mutableStateOf<String?>(null)
 
+    /**
+     * The settings' sections that are open (by title): every one starts
+     * closed (the user, 0.11.0: the screen had a lot going on), and stays as
+     * you leave it until the app is closed. CALIBRATION opens by itself when
+     * a calibration finishes.
+     */
+    var openSections by mutableStateOf(emptySet<String>())
+        private set
+
+    /** Opens or closes the section [title]. */
+    fun toggleSection(title: String) {
+        openSections = if (title in openSections) openSections - title else openSections + title
+    }
+
+    /** AUTO CALIBRATE's summary and recommended MANUAL settings (null until a 0.11.0 calibration has run). */
+    var calibrationSummary by mutableStateOf<CalibrationSummary.Summary?>(null)
+        private set
+
+    /** Works the summary out again (a calibration, or new battery figures). */
+    private fun refreshSummary() {
+        val samples = CalibrationSummary.decode(settings.calibrationSamples)
+        val measured = SceneKind.entries.mapNotNull { k -> samples[k.id]?.let { CalibrationSummary.Measured(k.id, k.label, it) } }
+        calibrationSummary = if (measured.isEmpty()) null else CalibrationSummary.of(measured, powerState.refreshRates, CostModel(CostModel.decode(settings.impactModel)))
+    }
+
+    /** USE: switches to MANUAL with [preset]'s rate and quality (the toggles below stay as they are). */
+    fun usePreset(preset: CalibrationSummary.Preset) {
+        choosePower(power.copy(profile = preset.profile))
+        manualQuality = preset.quality
+        settings.manualQuality = preset.quality
+        chooseMode(PowerMode.MANUAL)
+        runNote = "NOW MANUAL: ${preset.profile.label} (${preset.fps} fps) · QUALITY ${preset.quality.label}, for every wallpaper."
+    }
+
     /** What COPY BATTERY DATA copied (shown under its button), or null. */
     var batteryNote by mutableStateOf<String?>(null)
         private set
@@ -143,6 +178,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
     init {
         applyLook()
         applyRate()
+        refreshSummary()
     }
 
     fun select(kind: SceneKind) {
@@ -154,6 +190,8 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         zoom = settings.zoom(kind)
         loop.setKind(kind)
         applyLook()
+        // AUTO's rate is each wallpaper's own.
+        applyRate()
     }
 
     fun choosePalette(p: Palette) {
@@ -220,13 +258,16 @@ class HomeState(private val context: Context, private val settings: Settings, pr
 
     /** The phone's power state changed (PowerWatch). */
     fun onPower(state: PowerState) {
+        val ratesChanged = state.refreshRates != powerState.refreshRates
         powerState = state
         applyRate()
+        // The summary's rates are the display's (ECO takes its slow rate).
+        if (ratesChanged) refreshSummary()
     }
 
-    /** The power choices in force: AUTO's calibrated profile (BALANCED until calibrated), or MANUAL's (as Settings.effectivePower). */
+    /** The power choices in force for the selected wallpaper: AUTO's calibrated profile for it (BALANCED until calibrated), or MANUAL's (as Settings.effectivePower). */
     val effectivePower: PowerChoice
-        get() = if (mode == PowerMode.AUTO) power.copy(profile = calibrated?.profile ?: Calibration.PROFILE) else power
+        get() = if (mode == PowerMode.AUTO) power.copy(profile = calibrated?.profiles?.get(selected) ?: Calibration.PROFILE) else power
 
     /** The selected wallpaper's quality in force (as Settings.quality). */
     val quality: Quality
@@ -313,18 +354,24 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                     for (each in group) samples.getValue(kind) += Calibration.Sample(each, gpuMs, cpuMs)
                 }
                 val qualities = SceneKind.entries.associateWith { Calibration.choose(samples.getValue(it)) }
-                val chosen = SceneKind.entries.mapNotNull { k -> samples.getValue(k).firstOrNull { it.quality == qualities[k] } }
-                val result = Calibrated(qualities, Calibration.profile(chosen), deviceKey(), System.currentTimeMillis())
+                // Each wallpaper's own rate: BALANCED, or ECO for one over budget even at its cheapest.
+                val profiles = SceneKind.entries.associateWith { k -> Calibration.profile(samples.getValue(k).firstOrNull { it.quality == qualities[k] }) }
+                val slowest = profiles.values.minByOrNull { it.fps } ?: Calibration.PROFILE
+                val result = Calibrated(qualities, profiles, slowest, deviceKey(), System.currentTimeMillis())
+                settings.calibrationSamples = CalibrationSummary.encode(SceneKind.entries.associate { it.id to samples.getValue(it).toList() })
                 settings.calibrated = result
                 calibrated = result
                 val report = (listOf("AUTO CALIBRATE · ${stamp()} · ${Build.MANUFACTURER} ${Build.MODEL} · $rate fps · budget %.0f ms GPU, %.0f ms CPU".format(Locale.UK, Calibration.GPU_BUDGET_MS, Calibration.CPU_BUDGET_MS)) +
                     SceneKind.entries.map { k ->
-                        "${k.label} → ${qualities.getValue(k).label}: " + samples.getValue(k).joinToString(" · ") {
+                        "${k.label} → ${qualities.getValue(k).label} · ${profiles.getValue(k).label}: " + samples.getValue(k).joinToString(" · ") {
                             "${it.quality.label} GPU ${if (it.gpuMs.isNaN()) "n/a" else "%.2f".format(Locale.UK, it.gpuMs)} CPU %.2f".format(Locale.UK, it.cpuMs)
                         }
-                    } + "rate: ${result.profile.label}").joinToString("\n")
+                    }).joinToString("\n")
                 settings.calibrationReport = report
                 calibrationReport = report
+                refreshSummary()
+                // The summary, shown at once: its section opens.
+                openSections = openSections + CALIBRATION_SECTION
                 finished = true
             } finally {
                 loop.setCalibrating(false)
@@ -342,8 +389,8 @@ class HomeState(private val context: Context, private val settings: Settings, pr
 
     /**
      * Runs MEASURE IMPACT in [scope]: the selected wallpaper full screen at
-     * each rate in turn (STILL first), the battery current sampled once a
-     * second, the frames' cost from the preview's loop. About three
+     * each rate in turn (STILL first and last), the battery current sampled
+     * once a second, the frames' cost from the preview's loop. About four
      * minutes. It needs the phone unplugged (the current is the battery's
      * then), and keeps going only while the app is in front.
      */
@@ -383,7 +430,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                             step = index + 1,
                             steps = steps.size,
                             secondsLeft = Impact.STEP_SECONDS - second,
-                            note = "Leave the phone alone and the brightness as it is: about three minutes in all.",
+                            note = "Leave the phone alone and the brightness as it is: about four minutes in all.",
                         )
                         delay(1000)
                         if (second < Impact.SETTLE_SECONDS) continue
@@ -418,12 +465,13 @@ class HomeState(private val context: Context, private val settings: Settings, pr
                 settings.impactReport = report
                 // Each wallpaper's latest kept too, for COPY BATTERY DATA.
                 settings.setImpactReport(selected, report)
-                // What each rate adds for this wallpaper, for INSIGHT's estimates (the latest per wallpaper and rate).
-                val base = results.first { it.fps == 0 }.mA
+                // What each rate adds for this wallpaper, for INSIGHT's estimates (the latest per wallpaper and rate), over both STILLs' mean.
+                val base = Impact.base(results)
                 val model = CostModel.decode(settings.impactModel).toMutableMap()
                 for (r in results) if (r.fps > 0 && !r.mA.isNaN() && !base.isNaN()) model[Usage.key(selected.id, r.fps)] = r.mA - base
                 settings.impactModel = CostModel.encode(model)
                 refreshUsage()
+                refreshSummary()
                 finished = true
             } finally {
                 if (!finished) runNote = "MEASURE IMPACT STOPPED: run it again with the app in front and the phone left alone."
@@ -586,3 +634,6 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         SceneKind.PRISM -> PrismService::class.java
     }
 }
+
+/** The title of the settings' section that holds AUTO CALIBRATE's summary (opened when a calibration finishes). */
+const val CALIBRATION_SECTION = "CALIBRATION"

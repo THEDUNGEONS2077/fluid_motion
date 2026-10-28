@@ -9,7 +9,10 @@
  * clock: a page is reopened often).
  *
  * Layer: lib (pure Kotlin). The renderer (scene/prism/PrismRenderer.kt) draws
- * it with the web's own shaders (pr_*, byte for byte); the JVM frame dump
+ * it with the web's own shaders (pr_*, byte for byte) at HIGH and ULTRA, and
+ * at LOW and MEDIUM with lighter ones of the phone's own (prism_lite.*: the
+ * light pools summed at the corners of a fine grid on each face, not at
+ * every pixel; gridCubeVertices); the JVM frame dump
  * (FrameDumpTest) packs frames the same way, so tools/shader-check draws what
  * the phone does. Nothing here allocates per frame: the camera, the order
  * and the packed arrays are made once and written in place.
@@ -24,6 +27,7 @@ package com.thedungeons2077.fluidmotion.lib.prism
 
 import com.thedungeons2077.fluidmotion.lib.GlowLevel
 import com.thedungeons2077.fluidmotion.lib.PaletteColors
+import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.rain.Span
 import kotlin.math.PI
@@ -87,6 +91,22 @@ object PrismParams {
     /** How strongly a light pool tints the glass, and the most the shader takes. */
     const val LIGHT_GAIN = 0.2f
     const val MAX_LIGHTS = 16
+
+    /**
+     * PHONE: the lighter shaders (prism_lite.*, LOW and MEDIUM, for slower
+     * phones) sum the light pools at the corners of a LITE_GRID × LITE_GRID
+     * grid on each face and blend between them, instead of at every pixel:
+     * the pools are most of PRISM's cost (with none, a frame took a third
+     * of the time, 0.11.0's software check). The pools are wide and soft
+     * (reach 1.3 units and up, a face 3 at most), so at 6 × 6 the frame
+     * came out within a step of colour on all but 0.4% of pixels (at most
+     * 18 of 255, along a few edges), for 2.2 × less work; 4 × 4 left 1.2%
+     * off. A cell is at most half a unit across.
+     */
+    const val LITE_GRID = 6
+
+    /** PHONE: whether a quality draws with the lighter shaders (LOW and MEDIUM); HIGH and ULTRA keep the web's exactly. */
+    fun lite(quality: Quality): Boolean = quality == Quality.LOW || quality == Quality.MEDIUM
 
     /** PHONE: the screen shape the web's view was made for (16:9), and how much of the lost width an upright screen gets back (√). */
     const val REFERENCE_ASPECT = 16f / 9f
@@ -417,6 +437,39 @@ fun cubeVertices(): FloatArray {
         for (i in intArrayOf(0, 1, 2, 0, 2, 3)) {
             for (c in 0 until 3) out[o++] = quad[i][c]
             for (c in 0 until 3) out[o++] = n[c].toFloat()
+        }
+    }
+    return out
+}
+
+/**
+ * PHONE: the unit cube for the lighter shaders: [n] × [n] quads a face (each
+ * two triangles), corner and normal, 6 floats a vertex; the faces in
+ * cubeVertices' order and each wound as its face is there (counter-clockwise
+ * from outside), so it draws the same, with corners for the light pools'
+ * sum. At n = 1 it is cubeVertices exactly.
+ */
+fun gridCubeVertices(n: Int): FloatArray {
+    val cube = cubeVertices()
+    val out = FloatArray(6 * n * n * 6 * 6)
+    var o = 0
+    for (f in 0 until 6) {
+        // The face's quad: cubeVertices writes it as corners (0, 1, 2) and (0, 2, 3).
+        val base = f * 6 * 6
+        fun corner(v: Int, a: Int) = cube[base + v * 6 + a]
+        val c0 = 0
+        val c1 = 1
+        val c2 = 2
+        val c3 = 5
+        for (i in 0 until n) for (j in 0 until n) {
+            // Each grid corner (u along c0→c1, w along c0→c3): the face is a flat square, so this is exact.
+            val us = floatArrayOf(i / n.toFloat(), (i + 1) / n.toFloat(), (i + 1) / n.toFloat(), i / n.toFloat(), (i + 1) / n.toFloat(), i / n.toFloat())
+            val ws = floatArrayOf(j / n.toFloat(), j / n.toFloat(), (j + 1) / n.toFloat(), j / n.toFloat(), (j + 1) / n.toFloat(), (j + 1) / n.toFloat())
+            for (k in 0 until 6) {
+                for (a in 0 until 3) out[o + a] = corner(c0, a) + (corner(c1, a) - corner(c0, a)) * us[k] + (corner(c3, a) - corner(c0, a)) * ws[k] + (corner(c2, a) - corner(c1, a) - corner(c3, a) + corner(c0, a)) * us[k] * ws[k]
+                for (a in 3 until 6) out[o + a] = corner(c0, a)
+                o += 6
+            }
         }
     }
     return out

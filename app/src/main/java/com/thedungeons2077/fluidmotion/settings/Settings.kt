@@ -56,9 +56,12 @@ class Settings(context: Context) {
     var calibrated: Calibrated?
         get() {
             val profile = prefs.getString("auto.profile", null) ?: return null
+            val overall = PowerProfile.find(profile)
             return Calibrated(
                 qualities = SceneKind.entries.associateWith { Quality.find(prefs.getString("auto.quality.${it.id}", null)) },
-                profile = PowerProfile.find(profile),
+                // Each wallpaper's own rate (0.11.0); a calibration from before has one for all.
+                profiles = SceneKind.entries.associateWith { k -> prefs.getString("auto.profile.${k.id}", null)?.let { PowerProfile.find(it) } ?: overall },
+                profile = overall,
                 device = prefs.getString("auto.device", "") ?: "",
                 at = prefs.getLong("auto.at", 0L),
             )
@@ -68,16 +71,17 @@ class Settings(context: Context) {
                 remove("auto.profile")
             } else {
                 for ((kind, q) in value.qualities) putString("auto.quality.${kind.id}", q.name)
+                for ((kind, r) in value.profiles) putString("auto.profile.${kind.id}", r.name)
                 putString("auto.profile", value.profile.name)
                 putString("auto.device", value.device)
                 putLong("auto.at", value.at)
             }
         }
 
-    /** The power choices in force: AUTO's calibrated profile (BALANCED until calibrated), or the hand-picked one. */
-    fun effectivePower(): PowerChoice {
+    /** The power choices in force for [kind]: AUTO's calibrated profile for it (BALANCED until calibrated), or the hand-picked one. */
+    fun effectivePower(kind: SceneKind): PowerChoice {
         val choice = power
-        return if (mode == PowerMode.AUTO) choice.copy(profile = calibrated?.profile ?: Calibration.PROFILE) else choice
+        return if (mode == PowerMode.AUTO) choice.copy(profile = calibrated?.profiles?.get(kind) ?: Calibration.PROFILE) else choice
     }
 
     /** A wallpaper's quality in force: AUTO's calibrated one (HIGH until calibrated), or MANUAL's. */
@@ -120,6 +124,11 @@ class Settings(context: Context) {
     var uiPalette: Palette
         get() = Palettes.find(prefs.getString("ui.palette", null))
         set(value) = write { putString("ui.palette", value.id) }
+
+    /** What the last AUTO CALIBRATE measured, each wallpaper at each quality (lib/CalibrationSummary.kt's stored form; empty until a 0.11.0 one has run). */
+    var calibrationSamples: String
+        get() = prefs.getString("auto.samples", "") ?: ""
+        set(value) = write { putString("auto.samples", value) }
 
     /** What the last AUTO CALIBRATE measured, as text (COPY DIAGNOSTICS; empty until one has run). */
     var calibrationReport: String
@@ -168,8 +177,16 @@ class Settings(context: Context) {
 }
 
 /**
- * AUTO CALIBRATE's result: each wallpaper's quality and the profile, the
- * phone it measured ([device]: system build and screen, so a system update
- * or a new resolution can ask for a new calibration), and when.
+ * AUTO CALIBRATE's result: each wallpaper's quality and its own rate
+ * ([profiles], 0.11.0: one wallpaper over budget no longer slows them all
+ * to ECO), [profile] the slowest of them (for a line about it), the phone
+ * it measured ([device]: system build and screen, so a system update or a
+ * new resolution can ask for a new calibration), and when.
  */
-data class Calibrated(val qualities: Map<SceneKind, Quality>, val profile: PowerProfile, val device: String, val at: Long)
+data class Calibrated(
+    val qualities: Map<SceneKind, Quality>,
+    val profiles: Map<SceneKind, PowerProfile>,
+    val profile: PowerProfile,
+    val device: String,
+    val at: Long,
+)

@@ -46,10 +46,10 @@ class BatteryExportTest {
         )
         val sections = Regex("^(?:---|===) (.+?) (?:---|===)$", RegexOption.MULTILINE).findAll(text).map { it.groupValues[1].substringBefore(" (") }.toList()
         assertEquals(listOf("fluid_motion BATTERY DATA", "SETTINGS", "AUTO CALIBRATE", "MEASURE IMPACT", "COST MODEL", "DAYS", "HOURS", "END"), sections)
-        // Half an hour at 30 fps at +30 mA: 15 mAh; the still frame adds nothing.
-        assertTrue(text, text.contains("2026-10-24 13h · 54000 · 0.95 ms · 0.90 ms · ≈ 15.00 mAh · megacity@30=30.0, megacity@0=6.0"))
+        // Half an hour at 30 fps: MEGACITY's measured mA per frame a second (1.0 at 30, 1.18 at 60; two figures, their mean) × 30 = +32.75 mA, 16.38 mAh; the still frame adds nothing.
+        assertTrue(text, text.contains("2026-10-24 13h · 54000 · 0.95 ms · 0.90 ms · ≈ 16.38 mAh · megacity@30=30.0, megacity@0=6.0"))
         assertTrue(text, text.contains("MEGACITY 30 fps: +30 mA"))
-        assertTrue(text, text.contains("2026-10-24 · 36 min · 30 min · 6 min · 54000 frames · 0.95 ms · 0.90 ms · ≈ 15.0 mAh\n    MEGACITY 30 fps 30 min · MEGACITY still 6 min"))
+        assertTrue(text, text.contains("2026-10-24 · 36 min · 30 min · 6 min · 54000 frames · 0.95 ms · 0.90 ms · ≈ 16.4 mAh\n    MEGACITY 30 fps 30 min · MEGACITY still 6 min"))
         assertTrue(text, text.contains("2026-10-23 · nothing on screen"))
         // The reports are kept whole, a blank line between them.
         assertTrue(text, text.contains("MEASURE IMPACT · MEGACITY\n\nMEASURE IMPACT · VELOCITY"))

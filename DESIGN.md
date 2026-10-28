@@ -91,12 +91,14 @@ On a phone the sun is sized by the width, and the camera sits higher (√ of how
 
 ## The app
 - **The screen.** The selected wallpaper runs full screen. The brand panel `<fluid_motion>` sits top left with the time on the left and the date on the right (as the dashboard's). The controls sit in a panel at the bottom, within thumb reach, with **SET AS WALLPAPER ↗** last and largest. A tap on the wallpaper hides the controls to see it whole.
-- **Sections.**
+- **Sections.** Each folds (0.11.0, the user: the settings had a lot going on; every section collapsible, closed to start): its title is a button with `▸` / `▾` in the accent, and while closed it says what's chosen in it beside the lit rule, dim (`PRISM`, `NEON`, `AUTO · BALANCED · ULTRA`). All are closed when the app opens; CALIBRATION opens by itself when a calibration finishes. A note from a run or a choice shows above them, so a closed section can't hide it. The cyberdeck dashboard's SYSTEM folds the same way (its 0.25.0).
   - WALLPAPER: picture tiles (thumbnails rendered by the shader check), one marked ● ON HOME when it's the home screen's. The names may wrap to a second line. Up to four tiles share the width; with more (seven since 0.8.0, eight since 0.10.0) the row scrolls sideways, each tile wide enough for its name and ● ON HOME, opening at the chosen one.
   - COLOURS: that wallpaper's palette, as swatches in each palette's own colours, three to a row (eight palettes: 3, 3, 2).
   - GLOW (shown for every wallpaper; SUNSET ignores it: F7 may hide it there).
   - ZOOM: that wallpaper's zoom, − value + RESET (each button named for TalkBack, the value read out as it changes); or pinch the preview.
-  - POWER: ECO, BALANCED, SMOOTH; STILL IN BATTERY SAVER; COOL DOWN WHEN HOT.
+  - POWER: AUTO or MANUAL (ECO, BALANCED, SMOOTH; QUALITY); STILL IN BATTERY SAVER; COOL DOWN WHEN HOT.
+  - CALIBRATION (0.11.0): what AUTO picked for each wallpaper and its cost, a wallpaper over budget lit bright; then LONGEST BATTERY, RECOMMENDED and SMOOTHEST, each a boxed card on the background colour (RECOMMENDED's border and name lit) with its figures in words and a USE button.
+  - INSIGHT: the week in bars, and COPY BATTERY DATA.
   - APP COLOURS: the screen's own palette.
   - STATUS: the rate, the cost of a frame, GPU priority and the version.
 - **Type and colour.** One family, JetBrains Mono (the web's files, converted to TTF). Labels are UPPERCASE with letter-spacing, and brightness shows importance. The one effect is the accent glow, used for state.

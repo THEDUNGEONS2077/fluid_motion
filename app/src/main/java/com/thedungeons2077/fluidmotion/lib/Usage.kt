@@ -48,9 +48,14 @@ class UsageHour(val hour: Long) {
 /**
  * What a wallpaper adds to the battery's current (mA) at a rate. Measured
  * figures ("matrix-rain@30" → extra mA over a still frame, from MEASURE
- * IMPACT) are used first, then the same rate measured on another
- * wallpaper, then the measured mA per frame a second, then a typical
- * figure (the S25 Ultra, 0.2.0: about 1.2 mA per frame a second).
+ * IMPACT) come first: a wallpaper's cost is close to proportional to its
+ * rate (the S25 Ultra's SUNSET, 0.8.1: 1.46, 1.47 and 1.45 mA per frame a
+ * second at 24, 30 and 60 fps), so its figure is the median of its measured
+ * mA per frame a second, times the rate. One bad reading among three can't
+ * move a median (0.11.0; before, HORIZON's ECO read +149 mA and that was
+ * taken as is). Then the same rate measured on other wallpapers, then the
+ * measured mA per frame a second, then a typical figure (the S25 Ultra,
+ * 0.2.0: about 1.2 mA per frame a second).
  */
 class CostModel(private val measured: Map<String, Float>) {
     /** Whether any of it was measured on this phone. */
@@ -59,7 +64,15 @@ class CostModel(private val measured: Map<String, Float>) {
     /** Extra current (mA) for [kind] drawing at [fps] (0: a still frame, nothing extra). */
     fun milliamps(kind: String, fps: Int): Float {
         if (fps <= 0) return 0f
-        measured[Usage.key(kind, fps)]?.let { return max(0f, it) }
+        // This wallpaper's own: the median mA per frame a second (two figures: their mean), times the rate.
+        val own = measured.mapNotNull { (k, mA) ->
+            if (k.substringBefore('@') != kind) null else k.substringAfter('@').toIntOrNull()?.takeIf { it > 0 }?.let { max(0f, mA) / it }
+        }.sorted()
+        if (own.isNotEmpty()) {
+            val mid = own.size / 2
+            val median = if (own.size % 2 == 1) own[mid] else (own[mid - 1] + own[mid]) / 2f
+            return median * fps
+        }
         val sameRate = measured.filterKeys { it.endsWith("@$fps") }.values
         if (sameRate.isNotEmpty()) return max(0f, sameRate.average().toFloat())
         val perFps = measured.mapNotNull { (k, mA) -> k.substringAfter('@').toIntOrNull()?.takeIf { it > 0 }?.let { mA / it } }

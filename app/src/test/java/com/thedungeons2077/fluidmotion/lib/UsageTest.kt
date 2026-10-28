@@ -50,16 +50,28 @@ class UsageTest {
     @Test
     fun `measured figures come first, then the same rate, then per frame, then typical`() {
         val model = CostModel(mapOf("matrix-rain@30" to 34f, "matrix-rain@60" to 78f, "velocity@24" to -2f))
-        assertEquals(34f, model.milliamps("matrix-rain", 30), 0f)
+        // Two of its own: their mean mA per frame a second, times the rate.
+        assertEquals((34f / 30 + 78f / 60) / 2 * 30, model.milliamps("matrix-rain", 30), 1e-3f)
         assertEquals(34f, model.milliamps("neural-net", 30), 0f)
         // A small negative measurement (noise) counts as nothing.
         assertEquals(0f, model.milliamps("velocity", 24), 0f)
         assertEquals(0f, model.milliamps("matrix-rain", 0), 0f)
-        // 15 fps (a halved rate): the measured mA per frame a second, averaged.
+        // 15 fps on a wallpaper never measured: the measured mA per frame a second, averaged.
         val perFps = (34f / 30 + 78f / 60 + -2f / 24) / 3
-        assertEquals(perFps * 15, model.milliamps("matrix-rain", 15), 1e-4f)
+        assertEquals(perFps * 15, model.milliamps("neural-net", 15), 1e-4f)
         assertEquals(36f, CostModel(emptyMap()).milliamps("matrix-rain", 30), 1e-4f)
         assertEquals(mapOf("a@30" to 1.5f), CostModel.decode(CostModel.encode(mapOf("a@30" to 1.5f))))
+    }
+
+    @Test
+    fun `one bad reading among three doesn't move a wallpaper's figure`() {
+        // The S25 Ultra's HORIZON, 0.10.0: ECO read +149 mA, BALANCED +39, SMOOTH +77.
+        val model = CostModel(mapOf("horizon@24" to 149f, "horizon@30" to 39f, "horizon@60" to 77f))
+        // Per frame a second: 6.21, 1.30, 1.28; the median is BALANCED's.
+        val median = 39f / 30
+        assertEquals(median * 24, model.milliamps("horizon", 24), 1e-3f)
+        assertEquals(median * 30, model.milliamps("horizon", 30), 1e-3f)
+        assertTrue(model.milliamps("horizon", 24) < model.milliamps("horizon", 30))
     }
 
     @Test

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.0 (build 15)
+- **PRISM runs on slower phones.** At QUALITY LOW and MEDIUM it now draws with lighter shaders: the light pools are worked out at the corners of a fine grid on each glass face, not at every pixel. That was most of its work. It looks the same (within a shade on 99.6% of the screen) for under half the cost. HIGH and ULTRA are exactly as before, and so is the dashboard's PRISM.
+- **AUTO picks a rate for each wallpaper.** Before, one wallpaper over budget (PRISM, on your S25 Ultra) slowed every wallpaper to ECO. Now only that wallpaper drops to ECO, and the rest stay at BALANCED. Calibrate again to get it.
+- **After AUTO CALIBRATE, a summary** (the new CALIBRATION section opens by itself when it finishes):
+  - **What AUTO picked** for each wallpaper, and what its frames cost on this phone.
+  - **Three ways to set MANUAL:** LONGEST BATTERY, RECOMMENDED and SMOOTHEST. Each shows the battery it costs an hour on screen, how busy the GPU gets for the heaviest wallpaper, and which wallpapers go over the frame budget. **USE** switches to it.
+- **The settings fold.** WALLPAPER, COLOURS, GLOW, ZOOM, POWER, CALIBRATION, INSIGHT, APP COLOURS and STATUS are all closed when the app opens. Each says what's chosen in it beside its title. Tap a title to open or close it.
+- **MEASURE IMPACT is steadier.**
+  - It measures STILL again at the end, and measures each rate against the average of the two. The phone's own draw had wandered between 99 and 130 mA from run to run. A run now takes about four minutes.
+  - A run where a slower rate reads dearer than a faster one is flagged NOISY: run it again.
+  - INSIGHT's estimates use the middle figure of a wallpaper's three rates, per frame, so one bad reading (HORIZON's ECO read +149 mA, twice its 60 fps figure) can't skew them.
+
 ## 0.10.0 (build 14)
 - **New wallpaper: PRISM,** from the dashboard: smoky glass blocks lit magenta and blue from inside, with smooth, thin edges. The camera sways a little and the lights breathe. It starts in NEON.
   - **On a phone:** the view is taller than the dashboard's, so the blocks recede up the screen instead of showing a thin slice.

@@ -6,7 +6,8 @@
  *
  * Reads the sources: the renderers' (and gl/ScaledTarget.kt's) `val x =
  * GlProgram(context.assets, "a.vert", "b.frag")` and their `x.u("name")`
- * calls (a `for (p in listOf(a, b))` loop counts for each program listed).
+ * calls (a `for (p in listOf(a, b))` loop counts for each program listed, as
+ * does `for (p in list)` over a `val list = listOf(a, b)`).
  */
 package com.thedungeons2077.fluidmotion.scene
 
@@ -42,8 +43,12 @@ class ShaderUniformsTest {
             val code = file.readText()
             val programs = Regex("""val (\w+) = GlProgram\((?:context\.)?assets, "([\w.]+)", "([\w.]+)"\)""").findAll(code)
                 .associate { it.groupValues[1] to (it.groupValues[2] to it.groupValues[3]) }
-            val loops = Regex("""for \((\w+) in listOf\(([\w, ]+)\)\)""").findAll(code)
+            // Lists of programs made once (`val list = listOf(a, b)`), and loops over a list written out or named.
+            val lists = Regex("""val (\w+) = listOf\(([\w, ]+)\)""").findAll(code)
                 .associate { m -> m.groupValues[1] to m.groupValues[2].split(",").map { it.trim() } }
+            val loops = Regex("""for \((\w+) in listOf\(([\w, ]+)\)\)""").findAll(code)
+                .associate { m -> m.groupValues[1] to m.groupValues[2].split(",").map { it.trim() } } +
+                Regex("""for \((\w+) in (\w+)\)""").findAll(code).mapNotNull { m -> lists[m.groupValues[2]]?.let { m.groupValues[1] to it } }
             val used = programs.keys.associateWith { mutableSetOf<String>() }
             for (m in Regex("""(\w+)\.u\("(\w+)"\)""").findAll(code)) {
                 val owner = m.groupValues[1]
@@ -59,8 +64,8 @@ class ShaderUniformsTest {
             }
         }
         println("programs $programCount, uniforms $uniformCount")
-        // Not vacuous: rain 3 programs, neural 3, velocity 4, data flow 4, megacity 5 (its city cache's copy too), horizon 2, sunset 2, prism 2, the upscale 1, and their uniforms all looked at.
-        assertTrue("programs found: $programCount", programCount == 26)
+        // Not vacuous: rain 3 programs, neural 3, velocity 4, data flow 4, megacity 5 (its city cache's copy too), horizon 2, sunset 2, prism 3 (its lighter pair too), the upscale 1, and their uniforms all looked at.
+        assertTrue("programs found: $programCount", programCount == 27)
         assertTrue("uniforms checked: $uniformCount", uniformCount > 120)
         assertTrue(problems.joinToString("\n"), problems.isEmpty())
     }

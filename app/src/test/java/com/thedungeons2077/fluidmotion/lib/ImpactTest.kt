@@ -47,8 +47,28 @@ class ImpactTest {
         assertTrue(r, "STILL: 600 mA" in r)
         assertTrue(r, "BALANCED 30: +40 mA (+0.8% an hour)" in r)
         assertTrue(r, "GPU 1.20 ms" in r)
-        assertEquals(listOf("STILL", "ECO", "BALANCED", "SMOOTH"), Impact.steps(emptyList()).map { it.label })
+        assertEquals(listOf("STILL", "ECO", "BALANCED", "SMOOTH", "STILL AGAIN"), Impact.steps(emptyList()).map { it.label })
         // On the S25 Ultra's display, ECO is measured at the rate it really draws at.
-        assertEquals(listOf(0, 24, 30, 60), Impact.steps(listOf(10f, 24f, 30f, 48f, 60f)).map { it.fps })
+        assertEquals(listOf(0, 24, 30, 60, 0), Impact.steps(listOf(10f, 24f, 30f, 48f, 60f)).map { it.fps })
+    }
+
+    @Test
+    fun `STILL at both ends, the base their mean, and a run where a slower rate reads dearer is flagged`() {
+        val results = listOf(
+            Impact.Result("STILL", 0, 120f, 0f, 0f, Float.NaN, 26f),
+            Impact.Result("ECO", 24, 271f, 24f, 0.77f, 2.11f, 26f),
+            Impact.Result("BALANCED", 30, 161f, 30f, 0.82f, 2.08f, 26f),
+            Impact.Result("SMOOTH", 60, 199f, 60f, 0.78f, 2.12f, 26f),
+            Impact.Result("STILL AGAIN", 0, 124f, 0f, 0f, Float.NaN, 26f),
+        )
+        assertEquals(122f, Impact.base(results), 1e-4f)
+        assertEquals(listOf("ECO > BALANCED", "ECO > SMOOTH"), Impact.inconsistent(results))
+        val r = Impact.report(results, 5000f, "S25")
+        assertTrue(r, "STILL: 120 mA (the base: screen and phone)" in r)
+        assertTrue(r, "STILL AGAIN: 124 mA (+4 mA over the run; the base is their mean, 122 mA)" in r)
+        assertTrue(r, "BALANCED 30: +39 mA" in r)
+        assertTrue(r, "NOISY: ECO > BALANCED, ECO > SMOOTH" in r)
+        // A steady run isn't flagged.
+        assertTrue(Impact.inconsistent(results.filter { it.label != "ECO" }).isEmpty())
     }
 }

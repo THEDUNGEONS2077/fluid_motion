@@ -847,16 +847,18 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
   }
 
   // --- PRISM (scene/prism/PrismRenderer.kt) --------------------------------------------
-  function prism(d, low = false, name = low ? 'prism-low' : 'prism') {
+  // `lite`: the blocks drawn with the phone's lighter pair (prism_lite.*, as at LOW and MEDIUM) on its finer cube (d.gridCube).
+  function prism(d, low = false, name = low ? 'prism-low' : 'prism', lite = low) {
     const target = scaledTarget(low ? d.lowScale : 1);
     const t = d.tones;
     const back = program('pr_full.vert', 'pr_back.frag');
-    const box = program('pr_box.vert', 'pr_box.frag');
+    const box = lite ? program('prism_lite.vert', 'prism_lite.frag') : program('pr_box.vert', 'pr_box.frag');
     // build: the cube per vertex (corner, normal), the blocks per instance (min corner, size), in back-to-front order.
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(d.cube), gl.STATIC_DRAW);
+    const cube = lite ? d.gridCube : d.cube;
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cube), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
     gl.enableVertexAttribArray(1);
@@ -900,11 +902,11 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     gl.uniform1f(box.u('uGlowAmt'), d.glowAmt);
     gl.uniform1f(box.u('uFar'), d.far);
     gl.bindVertexArray(vao);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, d.count);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, cube.length / 6, d.count);
     gl.bindVertexArray(null);
     gl.disable(gl.BLEND);
     target.end();
-    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${d.count} blocks, ${d.lights} lights;`);
+    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${lite ? 'the lighter shaders; ' : ''}${d.count} blocks, ${d.lights} lights;`);
   }
 
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
@@ -934,6 +936,8 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     ['sunset-zoom', () => sunset(dumps['sunset-zoom'], false, 'sunset-zoom')],
     ['prism', () => prism(dumps.prism)],
     ['prism-low', () => prism(dumps.prism, true)],
+    // Full resolution with the lighter pair: compared with 'prism', it should match to within a step of colour.
+    ['prism-lite', () => prism(dumps.prism, false, 'prism-lite', true)],
     ['prism-zoom', () => prism(dumps['prism-zoom'], false, 'prism-zoom')],
   ];
   for (const [name, fn] of runs) {

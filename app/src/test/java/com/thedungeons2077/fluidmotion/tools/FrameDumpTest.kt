@@ -32,6 +32,7 @@ import com.thedungeons2077.fluidmotion.lib.prism.PrismTones
 import com.thedungeons2077.fluidmotion.lib.prism.PrismView
 import com.thedungeons2077.fluidmotion.lib.prism.buildField
 import com.thedungeons2077.fluidmotion.lib.prism.cubeVertices
+import com.thedungeons2077.fluidmotion.lib.prism.gridCubeVertices
 import com.thedungeons2077.fluidmotion.lib.horizon.HorizonParams
 import com.thedungeons2077.fluidmotion.lib.horizon.HorizonTones
 import com.thedungeons2077.fluidmotion.lib.horizon.HorizonView
@@ -406,6 +407,7 @@ class FrameDumpTest {
             .num("density", density).num("densityLow", density * lowScale).num("aspect", full.aspect)
             .floats("viewProj", camera.viewProj).floats("eye", camera.eye)
             .floats("boxes", frame.sorted).num("count", field.count.toFloat())
+            .floats("gridCube", gridCubeVertices(p.LITE_GRID))
             .floats("lightPos", frame.lightPos, frame.lights * 4).floats("lightCol", frame.lightCol, frame.lights * 3).num("lights", frame.lights.toFloat())
             .floats("cube", cubeVertices())
             .num("alpha", p.GLASS_FRONT).num("fresnel", p.FRESNEL).num("edgeW", p.EDGE_WIDTH).num("edgeGlow", p.EDGE_GLOW).num("glowAmt", glow.edge).num("light", glow.light).num("far", p.DISTANCE * 2f)

@@ -89,8 +89,13 @@ object Calibration {
             ?: samples.minByOrNull { it.load }?.quality
             ?: Quality.DEFAULT
 
-    /** The profile AUTO draws at: BALANCED, or ECO if even the chosen quality is over budget somewhere (a weak phone). */
-    fun profile(chosen: List<Sample>): PowerProfile = if (chosen.all { it.within }) PROFILE else PowerProfile.ECO
+    /**
+     * The profile AUTO draws a wallpaper at: BALANCED, or ECO if even its
+     * chosen quality is over budget (a heavy wallpaper on a weak phone).
+     * Each wallpaper its own (0.11.0): before, one over budget slowed every
+     * wallpaper to ECO (the S25 Ultra's PRISM, 0.10.0).
+     */
+    fun profile(chosen: Sample?): PowerProfile = if (chosen == null || chosen.within) PROFILE else PowerProfile.ECO
 
     /**
      * What a quality really draws at on a screen of [density] (its scale,

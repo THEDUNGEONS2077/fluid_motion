@@ -46,8 +46,8 @@ class QualityTest {
         )
         val chosen = Calibration.choose(samples)
         assertEquals(Quality.LOW, chosen)
-        assertEquals(PowerProfile.ECO, Calibration.profile(listOf(samples.first { it.quality == chosen })))
-        assertEquals(PowerProfile.BALANCED, Calibration.profile(listOf(Calibration.Sample(Quality.ULTRA, 1.2f, 0.9f))))
+        assertEquals(PowerProfile.ECO, Calibration.profile(samples.first { it.quality == chosen }))
+        assertEquals(PowerProfile.BALANCED, Calibration.profile(Calibration.Sample(Quality.ULTRA, 1.2f, 0.9f)))
     }
 
     @Test

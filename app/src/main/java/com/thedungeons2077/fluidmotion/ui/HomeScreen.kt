@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,6 +54,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import com.thedungeons2077.fluidmotion.lib.PowerMode
+import com.thedungeons2077.fluidmotion.lib.Calibration
+import com.thedungeons2077.fluidmotion.lib.CalibrationSummary
+import com.thedungeons2077.fluidmotion.lib.Impact
+import com.thedungeons2077.fluidmotion.lib.profileFps
 import com.thedungeons2077.fluidmotion.lib.Quality
 import com.thedungeons2077.fluidmotion.lib.Zoom
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -85,7 +90,7 @@ fun HomeScreen(state: HomeState, loop: RenderLoop) {
     val d = state.uiPalette.colors.toDeck()
     val scope = rememberCoroutineScope()
     val measuring = state.run != null
-    // The screen stays on while measuring (a run is about three minutes).
+    // The screen stays on while measuring (a run is about four minutes).
     val view = LocalView.current
     DisposableEffect(measuring) {
         view.keepScreenOn = measuring
@@ -209,89 +214,182 @@ private fun Controls(state: HomeState, onMeasure: () -> Unit, onCalibrate: () ->
             .verticalScroll(rememberScrollState())
             .padding(horizontal = DeckSize.lg, vertical = DeckSize.sm),
     ) {
-        SectionTitle("WALLPAPER")
-        Tiles(
-            items = SceneKind.entries,
-            selected = state.selected,
-            active = state.active,
-            label = { it.label },
-            picture = { thumbnail(it) },
-            onSelect = state::select,
-        )
+        // A note from a run or a choice (MEASURE IMPACT, AUTO CALIBRATE, USE): above the sections, so a closed one doesn't hide it.
+        state.runNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(vertical = DeckSize.sm)) }
+        val fold = Folds(state)
 
-        SectionTitle("COLOURS · ${state.selected.label}")
-        Swatches(Palettes.ALL, state.palette.id, state::choosePalette, "wallpaper colours")
-
-        SectionTitle("GLOW")
-        Segmented(GlowLevel.entries.map { it.label }, state.glow.ordinal, { state.chooseGlow(GlowLevel.entries[it]) })
-
-        SectionTitle("ZOOM · ${state.selected.label}")
-        Stepper(
-            value = Zoom.label(state.zoom),
-            what = "zoom",
-            canDown = state.zoom > Zoom.MIN,
-            canUp = state.zoom < Zoom.MAX,
-            canReset = state.zoom != Zoom.DEFAULT,
-            onDown = { state.stepZoom(-1) },
-            onUp = { state.stepZoom(1) },
-            onReset = { state.chooseZoom(Zoom.DEFAULT) },
-        )
-        DeckText("Or pinch the wallpaper. Each wallpaper keeps its own zoom, as sharp at any.", DeckType.detail, d.text, Modifier.padding(top = DeckSize.sm))
-
-        SectionTitle("POWER")
-        Segmented(PowerMode.entries.map { it.label }, state.mode.ordinal, { state.chooseMode(PowerMode.entries[it]) })
-        if (state.mode == PowerMode.AUTO) {
-            DeckText(autoText(state), DeckType.detail, d.text, Modifier.padding(top = DeckSize.sm, bottom = DeckSize.sm))
-            DeckButton(
-                if (state.calibrated == null) "AUTO CALIBRATE" else "CALIBRATE AGAIN",
-                onCalibrate,
-                Modifier.fillMaxWidth(),
-                primary = state.calibrated == null || state.calibrationStale,
-                label = "time each wallpaper at each quality on this phone, about half a minute",
+        fold("WALLPAPER", state.selected.label) {
+            Tiles(
+                items = SceneKind.entries,
+                selected = state.selected,
+                active = state.active,
+                label = { it.label },
+                picture = { thumbnail(it) },
+                onSelect = state::select,
             )
-        } else {
-            Spacer(Modifier.height(DeckSize.sm))
-            Segmented(PowerProfile.entries.map { it.label }, state.power.profile.ordinal, { state.choosePower(state.power.copy(profile = PowerProfile.entries[it])) })
+        }
+
+        fold("COLOURS", state.palette.label) {
+            DeckText("For ${state.selected.label}: each wallpaper keeps its own.", DeckType.detail, d.textDim, Modifier.padding(bottom = DeckSize.sm))
+            Swatches(Palettes.ALL, state.palette.id, state::choosePalette, "wallpaper colours")
+        }
+
+        fold("GLOW", state.glow.label) {
+            Segmented(GlowLevel.entries.map { it.label }, state.glow.ordinal, { state.chooseGlow(GlowLevel.entries[it]) })
+        }
+
+        fold("ZOOM", Zoom.label(state.zoom)) {
+            Stepper(
+                value = Zoom.label(state.zoom),
+                what = "zoom",
+                canDown = state.zoom > Zoom.MIN,
+                canUp = state.zoom < Zoom.MAX,
+                canReset = state.zoom != Zoom.DEFAULT,
+                onDown = { state.stepZoom(-1) },
+                onUp = { state.stepZoom(1) },
+                onReset = { state.chooseZoom(Zoom.DEFAULT) },
+            )
+            DeckText("Or pinch the wallpaper. Each wallpaper keeps its own zoom, as sharp at any.", DeckType.detail, d.text, Modifier.padding(top = DeckSize.sm))
+        }
+
+        fold("POWER", "${state.mode.label} · ${state.effectivePower.profile.label} · ${state.quality.label}") {
+            Segmented(PowerMode.entries.map { it.label }, state.mode.ordinal, { state.chooseMode(PowerMode.entries[it]) })
+            if (state.mode == PowerMode.AUTO) {
+                DeckText(autoText(state), DeckType.detail, d.text, Modifier.padding(top = DeckSize.sm, bottom = DeckSize.sm))
+                DeckButton(
+                    if (state.calibrated == null) "AUTO CALIBRATE" else "CALIBRATE AGAIN",
+                    onCalibrate,
+                    Modifier.fillMaxWidth(),
+                    primary = state.calibrated == null || state.calibrationStale,
+                    label = "time each wallpaper at each quality on this phone, about half a minute",
+                )
+            } else {
+                Spacer(Modifier.height(DeckSize.sm))
+                Segmented(PowerProfile.entries.map { it.label }, state.power.profile.ordinal, { state.choosePower(state.power.copy(profile = PowerProfile.entries[it])) })
+                DeckText(
+                    "${state.profileFps} frames a second on this display while the wallpaper is on screen; nothing at all while it's hidden.",
+                    DeckType.detail,
+                    d.textDim,
+                    Modifier.padding(top = DeckSize.sm, bottom = DeckSize.sm),
+                )
+                DeckText("QUALITY", DeckType.small, d.textDim, Modifier.padding(bottom = DeckSize.xs).semantics { heading() })
+                Segmented(Quality.entries.map { it.label }, state.manualQuality.ordinal, { state.chooseQuality(Quality.entries[it]) })
+                DeckText(qualityText(state.manualQuality), DeckType.detail, d.textDim, Modifier.padding(top = DeckSize.sm))
+            }
+            Spacer(Modifier.height(DeckSize.xs))
+            Toggle("STILL IN BATTERY SAVER", "A still frame while battery saver is on.", state.power.stillInSaver, { state.choosePower(state.power.copy(stillInSaver = it)) })
+            Toggle("COOL DOWN WHEN HOT", "SMOOTH eases to 30 as the phone nears its heat limit; half the frames when warm, a still frame when hot.", state.power.coolWhenHot, { state.choosePower(state.power.copy(coolWhenHot = it)) })
+        }
+
+        // AUTO CALIBRATE's summary and three ways to set MANUAL; it opens by itself when a calibration finishes.
+        fold(CALIBRATION_SECTION, state.calibrationSummary?.let { "RECOMMENDED ${it.recommended.profile.label} · ${it.recommended.quality.label}" } ?: "NOT RUN") {
+            CalibrationResult(state, onCalibrate)
+        }
+
+        fold("INSIGHT", "") {
+            Insight(state)
+            // Everything behind INSIGHT and the measurements, as text to paste back while tuning the wallpapers.
+            DeckButton("COPY BATTERY DATA", state::copyBatteryData, Modifier.fillMaxWidth(), label = "copy the week's battery data, every measurement and the settings, to paste")
+            state.batteryNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(top = DeckSize.sm)) }
+        }
+
+        fold("APP COLOURS", state.uiPalette.label) {
+            Swatches(Palettes.ALL, state.uiPalette.id, state::chooseUiPalette, "app colours")
+        }
+
+        fold("STATUS", "${BuildConfig.VERSION_NAME}") {
+            DeckText(status(state), DeckType.detail, d.text)
+            DeckText("fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", DeckType.detail, d.textDim)
+            // Stacked, full width: side by side, their names don't fit a phone.
+            Column(Modifier.fillMaxWidth().padding(vertical = DeckSize.sm), verticalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
+                DeckButton("MEASURE IMPACT", onMeasure, Modifier.fillMaxWidth(), label = "measure the battery cost of each rate, about four minutes")
+                DeckButton("COPY DIAGNOSTICS", state::copyDiagnostics, Modifier.fillMaxWidth(), label = "copy this phone's numbers to paste")
+            }
             DeckText(
-                "${state.profileFps} frames a second on this display while the wallpaper is on screen; nothing at all while it's hidden.",
+                state.impactReport.ifEmpty { "MEASURE IMPACT shows what each rate costs the battery on this phone: unplug it first." },
                 DeckType.detail,
                 d.textDim,
-                Modifier.padding(top = DeckSize.sm, bottom = DeckSize.sm),
+                Modifier.padding(bottom = DeckSize.sm),
             )
-            DeckText("QUALITY", DeckType.small, d.textDim, Modifier.padding(bottom = DeckSize.xs).semantics { heading() })
-            Segmented(Quality.entries.map { it.label }, state.manualQuality.ordinal, { state.chooseQuality(Quality.entries[it]) })
-            DeckText(qualityText(state.manualQuality), DeckType.detail, d.textDim, Modifier.padding(top = DeckSize.sm))
         }
-        Spacer(Modifier.height(DeckSize.xs))
-        Toggle("STILL IN BATTERY SAVER", "A still frame while battery saver is on.", state.power.stillInSaver, { state.choosePower(state.power.copy(stillInSaver = it)) })
-        Toggle("COOL DOWN WHEN HOT", "SMOOTH eases to 30 as the phone nears its heat limit; half the frames when warm, a still frame when hot.", state.power.coolWhenHot, { state.choosePower(state.power.copy(coolWhenHot = it)) })
+    }
+}
 
-        SectionTitle("INSIGHT")
-        Insight(state)
-        // Everything behind INSIGHT and the measurements, as text to paste back while tuning the wallpapers.
-        DeckButton("COPY BATTERY DATA", state::copyBatteryData, Modifier.fillMaxWidth(), label = "copy the week's battery data, every measurement and the settings, to paste")
-        state.batteryNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(top = DeckSize.sm)) }
-        Spacer(Modifier.height(DeckSize.sm))
+/** The settings' sections, each folding (Section), open or closed as HomeState.openSections says: `fold(title, value) { … }`. */
+private class Folds(private val state: HomeState) {
+    @Composable
+    operator fun invoke(title: String, value: String, content: @Composable ColumnScope.() -> Unit) =
+        Section(title, value, title in state.openSections, { state.toggleSection(title) }, content)
+}
 
-        SectionTitle("APP COLOURS")
-        Swatches(Palettes.ALL, state.uiPalette.id, state::chooseUiPalette, "app colours")
-
-        SectionTitle("STATUS")
-        DeckText(status(state), DeckType.detail, d.text)
-        DeckText("fluid_motion ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})", DeckType.detail, d.textDim)
-        // Stacked, full width: side by side, their names don't fit a phone.
-        Column(Modifier.fillMaxWidth().padding(vertical = DeckSize.sm), verticalArrangement = Arrangement.spacedBy(DeckSize.sm)) {
-            DeckButton("MEASURE IMPACT", onMeasure, Modifier.fillMaxWidth(), label = "measure the battery cost of each rate, about three minutes")
-            DeckButton("COPY DIAGNOSTICS", state::copyDiagnostics, Modifier.fillMaxWidth(), label = "copy this phone's numbers to paste")
-        }
-        state.runNote?.let { DeckText(it, DeckType.detail, d.textBright, Modifier.padding(bottom = DeckSize.sm)) }
+/**
+ * AUTO CALIBRATE's summary (lib/CalibrationSummary.kt): what AUTO picked
+ * for each wallpaper and what its frames cost, then three ways to set
+ * MANUAL, each with its battery, GPU and budget figures and a USE button;
+ * the recommended one lit.
+ */
+@Composable
+private fun CalibrationResult(state: HomeState, onCalibrate: () -> Unit) {
+    val d = LocalDeck.current
+    val summary = state.calibrationSummary
+    if (summary == null) {
         DeckText(
-            state.impactReport.ifEmpty { "MEASURE IMPACT shows what each rate costs the battery on this phone: unplug it first." },
+            if (state.calibrated == null) "Run AUTO CALIBRATE (POWER ▸ AUTO) to time each wallpaper on this phone: this shows what it found, and the settings it recommends."
+            else "Calibrate again to see the summary: the last calibration was made before 0.11.0 kept its measurements.",
             DeckType.detail,
-            d.textDim,
+            d.text,
             Modifier.padding(bottom = DeckSize.sm),
         )
+        DeckButton(if (state.calibrated == null) "AUTO CALIBRATE" else "CALIBRATE AGAIN", onCalibrate, Modifier.fillMaxWidth(), label = "time each wallpaper at each quality on this phone, about half a minute")
+        return
     }
+    val capacity = state.capacityMah
+    DeckText("AUTO · EACH WALLPAPER", DeckType.small, d.textDim, Modifier.padding(bottom = DeckSize.xs).semantics { heading() })
+    for (p in summary.picks) {
+        val cost = p.sample?.let { s -> (if (s.gpuMs.isNaN()) "" else "GPU %.1f".format(Locale.UK, s.gpuMs)) + " · CPU %.1f ms".format(Locale.UK, s.cpuMs) } ?: ""
+        val over = if (p.sample?.within == false) " · OVER BUDGET" else ""
+        DeckText("${p.label}: ${p.quality.label} · ${p.profile.label}  ($cost$over)", DeckType.detail, if (p.sample?.within == false) d.textBright else d.text)
+    }
+    if (summary.heavy.isNotEmpty()) {
+        DeckText(
+            "${CalibrationSummary.names(summary.heavy)} ${if (summary.heavy.size == 1) "is" else "are"} over the ${Calibration.GPU_BUDGET_MS.roundToInt()} ms budget even at LOW here, so AUTO draws ${if (summary.heavy.size == 1) "it" else "them"} at ECO. MANUAL draws at what you choose, and still smoothly if the phone keeps up.",
+            DeckType.detail,
+            d.textDim,
+            Modifier.padding(top = DeckSize.xs),
+        )
+    }
+    DeckText("AUTO stays the closest fit: it picks for each wallpaper. MANUAL sets one rate and one quality for all; three ways to set it:", DeckType.detail, d.text, Modifier.padding(vertical = DeckSize.sm))
+    for (p in summary.presets) {
+        val lit = p == summary.recommended
+        val shape = RoundedCornerShape(DeckSize.radius)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = DeckSize.sm)
+                .background(d.bg, shape)
+                .border(DeckSize.hairline, if (lit) d.accent35 else d.line, shape)
+                .padding(DeckSize.md),
+        ) {
+            DeckText("${p.name} · ${p.profile.label} ${p.fps} fps · ${p.quality.label}", DeckType.control, if (lit) d.textBright else d.text, glow = if (lit) d.glowText else null)
+            DeckText(p.about, DeckType.detail, d.textDim, Modifier.padding(bottom = DeckSize.xs))
+            DeckText(presetFigures(p, capacity, state.costFromThisPhone), DeckType.detail, d.text)
+            Spacer(Modifier.height(DeckSize.sm))
+            DeckButton("USE ${p.name}", { state.usePreset(p) }, Modifier.fillMaxWidth(), primary = lit, label = "switch to MANUAL at ${p.profile.label} and QUALITY ${p.quality.label}")
+        }
+    }
+}
+
+/** A preset's figures in words: battery an hour on screen, the GPU's busiest, and the frame budget. */
+private fun presetFigures(p: CalibrationSummary.Preset, capacity: Float?, measured: Boolean): String {
+    val battery = if (capacity != null) {
+        "Battery: about %.1f%% an hour on screen (up to %.1f%%)".format(Locale.UK, Impact.percentPerHour(p.meanMa, capacity), Impact.percentPerHour(p.maxMa, capacity))
+    } else {
+        "Battery: about +%d mA on screen (up to +%d)".format(Locale.UK, p.meanMa.roundToInt(), p.maxMa.roundToInt())
+    }
+    val source = if (measured) "" else ", from a typical figure: MEASURE IMPACT gives this phone's own"
+    val busy = if (p.gpuBusy.isNaN()) "" else "\nGPU: busy %d%% of the time for the heaviest wallpaper".format(Locale.UK, (p.gpuBusy * 100).roundToInt().coerceAtLeast(1))
+    val budget = if (p.over.isEmpty()) "\nEvery wallpaper within the frame budget." else "\nOver the frame budget: ${CalibrationSummary.names(p.over)} (${p.total - p.over.size} of ${p.total} within)."
+    return "$battery$source.$busy$budget"
 }
 
 /**
@@ -415,9 +513,13 @@ private fun autoText(state: HomeState): String {
     val c = state.calibrated
         ?: return "AUTO finds the balance for this phone: 30 frames a second (where the screen can slow down too) and the sharpest " +
             "quality each wallpaper draws cheaply here. Not calibrated yet: until then BALANCED, QUALITY HIGH."
-    val each = SceneKind.entries.joinToString(" · ") { "${it.label} ${c.qualities[it]?.label ?: Quality.DEFAULT.label}" }
+    // Each wallpaper's quality, and its rate where it isn't AUTO's usual BALANCED.
+    val each = SceneKind.entries.joinToString(" · ") { k ->
+        val r = c.profiles[k]?.takeIf { it != Calibration.PROFILE }?.let { " ${it.label}" } ?: ""
+        "${k.label} ${c.qualities[k]?.label ?: Quality.DEFAULT.label}$r"
+    }
     val stale = if (state.calibrationStale) "\nThe system or screen has changed since: calibrate again." else ""
-    return "Calibrated for this phone: ${c.profile.label} (${state.profileFps} fps) · QUALITY $each$stale"
+    return "Calibrated for this phone: ${Calibration.PROFILE.label} (${profileFps(Calibration.PROFILE, state.powerState.refreshRates)} fps) unless marked · QUALITY $each$stale\nCALIBRATION has the summary and recommended settings."
 }
 
 /** What a quality means on this phone. */

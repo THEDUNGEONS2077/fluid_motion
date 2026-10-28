@@ -67,7 +67,7 @@ abstract class FluidWallpaperService : WallpaperService() {
 
         /** The frame rate the settings and the phone's state call for. */
         private fun applyRate() {
-            val power = settings.effectivePower()
+            val power = settings.effectivePower(kind)
             loop.setRate(frameRate(power, PowerWatch.state), power.coolWhenHot)
         }
 

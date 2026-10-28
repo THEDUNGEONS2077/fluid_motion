@@ -3,10 +3,15 @@
  * battery, measured on the phone itself.
  *
  * Layer: lib (pure Kotlin). The test (ui/HomeState.kt runs it) shows the
- * wallpaper full screen at each rate in turn, STILL first, and samples the
- * battery current once a second. Each rate's extra current over STILL is
- * the wallpaper's own cost: the screen, the radios and everything else
- * are the same in every step, so they cancel out.
+ * wallpaper full screen at each rate in turn, STILL first and again last,
+ * and samples the battery current once a second. Each rate's extra current
+ * over STILL is the wallpaper's own cost: the screen, the radios and
+ * everything else are the same in every step, so they cancel out. STILL is
+ * measured at both ends (0.11.0) and the two averaged, so a phone whose
+ * own draw drifts during the run doesn't put the drift on the rates; and a
+ * run where a slower rate reads dearer than a faster one is flagged (the S25
+ * Ultra's HORIZON, 0.10.0: ECO +149 mA, BALANCED +39: something else was
+ * using the phone).
  */
 package com.thedungeons2077.fluidmotion.lib
 
@@ -19,9 +24,28 @@ object Impact {
     /** One step of a run: what's shown, at what rate (0: a still frame). */
     data class Step(val label: String, val fps: Int)
 
-    /** The steps on a display with these [refreshRates] (each profile's rate there): STILL is the base the others are measured against. */
+    /** The steps on a display with these [refreshRates] (each profile's rate there): STILL, at both ends, is the base the others are measured against. */
     fun steps(refreshRates: List<Float>): List<Step> =
-        listOf(Step("STILL", 0)) + PowerProfile.entries.map { Step(it.label, profileFps(it, refreshRates)) }
+        listOf(Step("STILL", 0)) + PowerProfile.entries.map { Step(it.label, profileFps(it, refreshRates)) } + Step("STILL AGAIN", 0)
+
+    /** The base (mA): the STILL steps' mean (NaN if none was measured). */
+    fun base(results: List<Result>): Float {
+        val still = results.filter { it.fps == 0 && !it.mA.isNaN() }
+        return if (still.isEmpty()) Float.NaN else still.map { it.mA }.average().toFloat()
+    }
+
+    /** How far a slower rate may read dearer than a faster one (mA) before the run is called noisy: the battery's reading wanders about this much. */
+    const val NOISE_MA = 15f
+
+    /** The rates that read dearer than a faster one by more than NOISE_MA (slower first), as "ECO > BALANCED". */
+    fun inconsistent(results: List<Result>): List<String> {
+        val rates = results.filter { it.fps > 0 && !it.mA.isNaN() }.sortedBy { it.fps }
+        val out = mutableListOf<String>()
+        for (i in rates.indices) for (j in i + 1 until rates.size) {
+            if (rates[i].mA > rates[j].mA + NOISE_MA) out += "${rates[i].label} > ${rates[j].label}"
+        }
+        return out
+    }
 
     /** How long each step runs (s), and the first part of it that's left out (the current settles after a change). */
     const val STEP_SECONDS = 45
@@ -63,12 +87,15 @@ object Impact {
 
     /** The report, to read and to paste: each rate's extra current over STILL, its cost in battery an hour, and its frames' cost. */
     fun report(results: List<Result>, capacityMah: Float?, about: String): String {
-        val base = results.firstOrNull { it.fps == 0 }?.mA ?: Float.NaN
+        val base = base(results)
+        val first = results.firstOrNull { it.fps == 0 }?.mA ?: Float.NaN
         val lines = mutableListOf("MEASURE IMPACT · $about")
         if (capacityMah != null) lines += "battery ${capacityMah.roundToInt()} mAh"
         for (r in results) {
             lines += if (r.fps == 0) {
-                "${r.label}: ${r.mA.roundToInt()} mA (the base: screen and phone)"
+                // The first STILL is the base's start; a second says how far it moved, and the base is their mean.
+                if (r.mA == first && results.indexOf(r) == results.indexOfFirst { it.fps == 0 }) "${r.label}: ${r.mA.roundToInt()} mA (the base: screen and phone)"
+                else "${r.label}: ${r.mA.roundToInt()} mA (" + "%+d mA".format(Locale.UK, (r.mA - first).roundToInt()) + " over the run; the base is their mean, ${base.roundToInt()} mA)"
             } else {
                 val extra = r.mA - base
                 val hour = if (capacityMah != null) " (%+.1f%% an hour)".format(Locale.UK, percentPerHour(extra, capacityMah)) else ""
@@ -78,6 +105,8 @@ object Impact {
                     " · %.0f fps drawn · CPU %.2f ms".format(Locale.UK, r.drawnFps, r.cpuMs) + gpu
             }
         }
+        val odd = inconsistent(results)
+        if (odd.isNotEmpty()) lines += "NOISY: ${odd.joinToString(", ")} (a slower rate can't cost more): something else used the phone; run it again"
         val temps = results.map { it.tempC }.filter { !it.isNaN() }
         if (temps.isNotEmpty()) lines += "battery %.1f → %.1f °C".format(Locale.UK, temps.first(), temps.last())
         return lines.joinToString("\n")
