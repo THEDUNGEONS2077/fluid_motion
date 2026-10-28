@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0 (build 13)
+- **NEURAL NET has no floating circles any more.** The soft, faint discs that drifted up behind the net are gone, at your request (on the dashboard too, its 0.19.0). The nodes, links, signals and glow are unchanged.
+  - **Battery:** a little less work a frame: four draw calls instead of five, and no circles to move.
+
 ## 0.8.1 (build 12)
 - **MATRIX RAIN is one smooth gradient,** greenest at the top and black at the bottom, with no line across the screen (the same fix as the dashboard's 0.17.6).
   - **Why there was a line:** the dark floor covered only the bottom 16%, so the point where it started showed as a straight edge. The green haze also had corners about half and 95% of the way down.
