@@ -43,7 +43,7 @@ Imports go downward: `ui`/`wallpaper` → `render` → `scene` → `gl` → `lib
      - **The sky** over the top half, worked out per pixel each frame. The web draws it once and keeps it, but a phone's screen doesn't keep its last picture, and reading a kept copy back every frame is memory traffic: more battery than the sky's few sums.
      - **The land** (`lib/horizon/Land.kt`) is made once per screen shape and zoom: jittered points, cut into triangles, sent once. Each strip is placed by the vertex shader at its distance from the camera, so a frame sends one number (`uCamZ`).
      - **No depth buffer.** The mesh lists the far wall, then the strips far end first. Two draws (`HorizonDraw`) cover them back to front from wherever the camera is, with back faces culled, so nearer hills cover farther ones. That spares a screen-sized depth buffer written and cleared every frame.
-     - **Triangle budget.** The cell follows the screen's shape (`HorizonView`), and zoomed out it grows to stay within 24 000 quads: about 17 000 at 100% on the S25 Ultra.
+     - **Triangle budget.** The cell follows the screen's shape (`HorizonView`), and zoomed out it grows to stay within 24 000 quads: about 4 700 at 100% on the S25 Ultra (17 000 in 0.8.x, before its cells grew for fewer hills).
    - **SUNSET** (0.8.0). One pass, two draw calls, no geometry, no textures, with the web's own shaders (`ss_*`). The sky above the horizon and the ground below it are each one full-screen triangle, scissored. The ground's only per-frame input is how far the grid has come (`uTravel`).
 3. **Swap.** `eglSwapBuffers`.
 4. **Measuring.** `render/FrameMeter.kt` measures each frame without allocating or waiting:
@@ -131,7 +131,17 @@ Each release that could change the cost is measured on the phone by the user (AU
   - **GPU:** 5.09 → **0.93 ms** at ULTRA, and AUTO CALIBRATE now picks ULTRA.
   - **MEASURE IMPACT:** +32 / +30 / +71 mA (−35% at BALANCED, −42% at SMOOTH).
   - **Heaviest now:** VELOCITY (2.08 ms) and the rain (1.49 ms). VELOCITY is light on the battery all the same (+16 mA at BALANCED), so it was left as it is.
-- **0.8.x: HORIZON and SUNSET** wait for their first AUTO CALIBRATE and MEASURE IMPACT (F6), along with a week of COPY BATTERY DATA. Here, HORIZON's land is about 17 000 quads (104 000 vertices) at 100%, and SUNSET is two full-screen passes with no geometry.
+- **0.8.1: HORIZON and SUNSET, first measured (F6, 2026-10-28).** Both at ULTRA, battery saver on, 60 fps asked and drawn, no late frames:
+
+    | Wallpaper (palette, glow) | CPU | GPU | ECO 24 | BALANCED 30 | SMOOTH 60 |
+    |---|---|---|---|---|---|
+    | HORIZON (OUTRUN, LOW) | 0.84 ms | 2.08 ms | +82 | +48 | +100 mA |
+    | SUNSET (BLOOD, MAX) | 0.76 ms | 1.28 ms | +35 | +44 | +87 mA |
+
+  - **Within the budget:** both under 3 ms of GPU and of CPU. HORIZON ties VELOCITY as the heaviest on the GPU; its land was then about 17 000 quads (104 000 vertices). SUNSET is two full-screen passes with no geometry.
+  - **HORIZON's ECO** (+82 mA) measured above BALANCED: most likely noise in a single run (the bases differ, 99 against 113 mA), to be seen again.
+  - **AUTO CALIBRATE** on the phone was still 0.7.0's, so it hadn't measured these two yet.
+- **0.9.0: HORIZON's bigger cells** (for fewer hills, the user's request): the land is about 4 700 quads (28 000 vertices), a quarter of 0.8.1's, so its GPU time should drop. To be measured.
 
 ## Verifying (no phone here)
 - **Unit tests** (`lib`):

@@ -31,6 +31,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** The land: its rows and points across, its cell (units), each point's place across, depth offset and height (units), row by row. */
@@ -145,9 +146,10 @@ class Land(
  * need, from the target's size (px), its px per dp and the zoom. The web
  * frames a 16:9 layout; a narrower screen (a phone, upright) keeps the
  * web's camera and lens (the land fills the bottom half, the horizon's
- * glow just above the middle) and makes the cells smaller by how much
- * narrower it is: then it shows as many cells across as the web does,
- * near and far, and they pass at the same pace.
+ * glow just above the middle) and makes the cells smaller by the square
+ * root of how much narrower it is (HorizonParams.CELL_NARROW_POWER): about
+ * half as many across as the web's, so its tall land isn't crowded with
+ * hills, passing at the web's pace in cells.
  */
 class HorizonView(val width: Float, val height: Float, val pxPerDp: Float, val zoom: Float) {
     private val p = HorizonParams
@@ -168,13 +170,16 @@ class HorizonView(val width: Float, val height: Float, val pxPerDp: Float, val z
     val sunX: Float = width * 0.5f
     val sunY: Float = horizon - short * p.SUN_LIFT
 
+    /** How much smaller than the web's the cells are (and the camera's pace): narrow to HorizonParams.CELL_NARROW_POWER. */
+    val shrink: Float = narrow.pow(p.CELL_NARROW_POWER)
+
     /** The cell (units) and the land's half width (units, past the screen's edges at the land's far end). */
     val cell: Float
     val halfWidth: Float
 
     init {
-        // The web's cell at the zoom, smaller by how much narrower the screen is; zoomed out, grown again to keep within the quad budget.
-        var c = (zoom / narrow).coerceIn(p.CELL_MIN, p.CELL_MAX)
+        // The web's cell at the zoom, smaller on a narrower screen (shrink); zoomed out, grown again to keep within the quad budget.
+        var c = (zoom / shrink).coerceIn(p.CELL_MIN, p.CELL_MAX)
         var hw = halfWidthFor(c)
         while ((DEPTH / c).roundToInt().toLong() * (2 * ceil(hw / c).toLong()) > p.QUAD_BUDGET && c < p.CELL_MAX) {
             c = min(p.CELL_MAX, c * 1.08f)
@@ -188,7 +193,7 @@ class HorizonView(val width: Float, val height: Float, val pxPerDp: Float, val z
     private fun halfWidthFor(c: Float) = width / (2f * focal) * DEPTH + 2f * c
 
     /** How fast the camera glides (units a second): the web's pace in cells, so a cell passes as often as there. */
-    val speed: Float = p.SPEED / narrow
+    val speed: Float = p.SPEED / shrink
 
     /** The edges' density (px per dp, zoomed). */
     val density: Float get() = pxPerDp

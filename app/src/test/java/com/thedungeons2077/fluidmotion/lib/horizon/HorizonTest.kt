@@ -83,16 +83,18 @@ class HorizonTest {
     }
 
     @Test
-    fun `framing - the web's on 16 to 9, smaller cells on an upright phone, the same cells across`() {
+    fun `framing - the web's on 16 to 9, smaller cells on an upright phone, but fewer than the web's across`() {
         assertEquals(1f, wide.narrow, 1e-5f)
         assertEquals(1f, wide.cell, 1e-5f)
         assertEquals(0.95f * 1080f, wide.focal, 1e-3f)
         assertEquals(540f - 1080f * p.SUN_LIFT, wide.sunY, 1e-3f)
         assertEquals(3.85f, phone.narrow, 0.01f)
-        assertEquals(1f / phone.narrow, phone.cell, 1e-5f)
-        // Cells across the bottom edge: (width / 2) / focal × (distance there) × 2 / cell, the same on both.
+        // Smaller by √(how much narrower): about half a unit on the S25 Ultra (0.8.0's full ratio crowded it with hills).
+        assertEquals(1f / kotlin.math.sqrt(phone.narrow), phone.cell, 1e-5f)
+        assertEquals(0.51f, phone.cell, 0.01f)
+        // Cells across the bottom edge: (width / 2) / focal × (distance there) × 2 / cell: about half the web's.
         fun bottomCells(v: HorizonView) = v.width / v.focal * (v.focal / (v.height * 0.5f)) / v.cell
-        assertEquals(bottomCells(wide), bottomCells(phone), 0.01f)
+        assertEquals(bottomCells(wide) / kotlin.math.sqrt(phone.narrow), bottomCells(phone), 0.01f)
         // The land reaches past the screen's edges at its far end.
         assertTrue(phone.halfWidth >= phone.width / (2f * phone.focal) * p.DEPTH)
         // A cell passes as often as on the web.

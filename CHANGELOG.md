@@ -3,6 +3,9 @@
 ## 0.9.0 (build 13)
 - **NEURAL NET has no floating circles any more.** The soft, faint discs that drifted up behind the net are gone, at your request (on the dashboard too, its 0.19.0). The nodes, links, signals and glow are unchanged.
   - **Battery:** a little less work a frame: four draw calls instead of five, and no circles to move.
+- **HORIZON has fewer, bigger hills,** closer to its reference: big dark triangles up close, finer ones toward the glow. Its cells are twice the size they were, so about half as many cross the screen. The dashboard's HORIZON is unchanged.
+  - **Why it was crowded:** to show as many cells across as the dashboard's wide screen, the phone made them four times smaller, and the phone's tall view then showed four times as many rows.
+  - **Battery:** a quarter of the triangles (about 4 700 squares instead of 17 000), so less work for the GPU each frame.
 
 ## 0.8.1 (build 12)
 - **MATRIX RAIN is one smooth gradient,** greenest at the top and black at the bottom, with no line across the screen (the same fix as the dashboard's 0.17.6).

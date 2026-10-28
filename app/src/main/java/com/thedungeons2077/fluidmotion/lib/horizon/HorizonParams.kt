@@ -24,13 +24,21 @@ object HorizonParams {
     /** Where the haze's far wall stands (units): just inside the land's far end, covering the strip up to the horizon. */
     const val WALL = DEPTH - 2f
 
-    /**
-     * PHONE: the screen shape the web's layout was made for (16:9). A
-     * narrower screen sees less of the land across, so its cells are made
-     * smaller by the ratio (HorizonView): a portrait phone shows as many
-     * cells across, near and far, as the web's 16:9 does.
-     */
+    /** PHONE: the screen shape the web's layout was made for (16:9). */
     const val REFERENCE_ASPECT = 16f / 9f
+
+    /**
+     * PHONE: how the cells shrink on a narrower screen: by (how much narrower)
+     * to this power (HorizonView). A narrow screen sees a narrow slice of the
+     * land, so at the web's cells only a cell or two would cross it. 0.8.0
+     * shrank them by the full ratio (power 1: as many across as the web's
+     * 16:9), but an upright phone's tall land then showed about four times
+     * the web's rows: a crowd of small hills. The user asked for fewer hills,
+     * closer to the reference (2026-10-28): the square root (as SUNSET's
+     * camera) gives cells twice as big on the S25 Ultra, about half as many
+     * across, and a quarter of the triangles.
+     */
+    const val CELL_NARROW_POWER = 0.5f
 
     /** PHONE: the cells' limits (units), and the most quads the land may have (zoomed out, cells grow to stay within it). */
     const val CELL_MIN = 0.2f

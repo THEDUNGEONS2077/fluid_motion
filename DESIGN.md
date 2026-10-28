@@ -18,7 +18,7 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 | DATA FLOW packets | 2.2 a second per million px² | 3.2 a second per screen | At the web's density a portrait phone gets one packet every second or so |
 | DATA FLOW drawing | The board drawn once into a layer; the light added over it, each tail in six fading slices | The board drawn again each frame from instances, the dot grid worked out per pixel; each tail fades smoothly in the shader (the slices' fade, squared) | No full-screen layer to keep and read back every frame |
 | MEGACITY | Drawn per pixel in WebGL 2 | The same shaders, in OpenGL ES 3: the same city, pixel for pixel, from the same layout | One pass per pixel was already the cheapest way to draw tens of thousands of windows |
-| HORIZON | A 16:9 layout: about 3.6 cells across the bottom, 41 at the haze | The web's camera and lens; cells smaller by how much narrower the screen is (about 3.85 on the S25 Ultra), so as many across, near and far, passing at the web's pace in cells | A narrow screen sees a narrow slice of the land: at the web's cells only a cell or two would cross it |
+| HORIZON | A 16:9 layout: about 3.6 cells across the bottom, 41 at the haze | The web's camera and lens; cells smaller by √(how much narrower the screen is): 0.51 units on the S25 Ultra (narrower by 3.85), about half the web's count across, passing at the web's pace in cells | A narrow screen sees a narrow slice of the land: at the web's cells only a cell or two would cross it. Shrunk by the full ratio (0.8.x), the tall land showed four times the web's rows, a crowd of small hills; the user asked for fewer, closer to the reference (0.9.0) |
 | HORIZON sky | Drawn once, kept by the canvas | Worked out each frame (top half) | A phone's screen doesn't keep its picture; reading a kept copy back costs more than the sums |
 | HORIZON land | 64 units deep, nearest strips first with a depth buffer | 48 units deep (the haze hides the land from 44), farthest first, back faces culled, no depth buffer | A quarter fewer triangles; no screen-sized buffer written each frame |
 | SUNSET sun | Scaled by the height | Scaled by the short side (the width), kept on the horizon as far up, in its radii, as on the web | Scaled by a phone's height, it would fill three quarters of the width |
@@ -76,7 +76,7 @@ Its shaders are the web's (`mc_*`), and the city is drawn once a second (0.7.0).
 
 **HORIZON** (SYNTH). A wireframe land of jittered triangles, teal edges with a soft core and glow, rolling toward a hot pink glow with a white core just above the middle, under a dark plum sky.
 - **The camera** glides forward, and nothing else moves.
-- **On a phone:** smaller cells (as many across as the web's 16:9), the land 48 deep, drawn far end first.
+- **On a phone:** cells half the web's size (about half as many across as its 16:9: big, dark triangles near, as in the reference), the land 48 deep, drawn far end first.
 - **GLOW:** sets the edges' glow and the horizon's.
 
 **SUNSET** (OUTRUN). The outrun sunset:

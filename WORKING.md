@@ -43,7 +43,7 @@ fluid_motion runs **cyberdeck_terminal**'s wallpapers (`~/projects/cyberdeck_ter
   - **Cache:** MEGACITY's city is worked out per pixel, so it's drawn once a second and copied (0.7.0: 5.09 → 0.93 ms of GPU a frame).
   - **Don't cache:** HORIZON's and SUNSET's skies are a few sums a pixel. A phone's screen doesn't keep its last picture, and reading a kept copy back every frame costs more memory traffic, so more battery, than working them out again (0.8.0).
 - **No extra screen-sized buffers.** HORIZON draws its land far end first with back faces culled instead of using a depth buffer (0.8.0). There are no stencil buffers and no multisampling: WebGL multisampling made HORIZON laggy on the user's PC (cyberdeck 0.17.5). Smooth lines are made in the shader.
-- **Budgets on geometry.** HORIZON's land stays within 24 000 quads at any zoom (about 17 000 at 100% on the S25).
+- **Budgets on geometry.** HORIZON's land stays within 24 000 quads at any zoom (about 4 700 at 100% on the S25 since 0.9.0, when its cells grew for fewer hills).
 - **Low priority.** The GL context asks for low GPU priority, and the render thread runs at background priority on the efficiency cores.
 - **Measure before and after, and say what it cost.** Each change that could cost battery names its expected effect, and the user's next MEASURE IMPACT confirms it.
 
