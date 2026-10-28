@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0 (build 14)
+- **New wallpaper: PRISM,** from the dashboard: smoky glass blocks lit magenta and blue from inside, with smooth, thin edges. The camera sways a little and the lights breathe. It starts in NEON.
+  - **On a phone:** the view is taller than the dashboard's, so the blocks recede up the screen instead of showing a thin slice.
+  - **Battery:** one instanced draw of about 190 blocks a frame, nothing allocated per frame. Run AUTO CALIBRATE and MEASURE IMPACT on it when you can.
+
 ## 0.9.0 (build 13)
 - **NEURAL NET has no floating circles any more.** The soft, faint discs that drifted up behind the net are gone, at your request (on the dashboard too, its 0.19.0). The nodes, links, signals and glow are unchanged.
   - **Battery:** a little less work a frame: four draw calls instead of five, and no circles to move.

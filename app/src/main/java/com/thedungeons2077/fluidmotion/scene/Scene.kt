@@ -18,6 +18,7 @@ import com.thedungeons2077.fluidmotion.scene.horizon.HorizonRenderer
 import com.thedungeons2077.fluidmotion.scene.megacity.MegacityRenderer
 import com.thedungeons2077.fluidmotion.scene.neural.NeuralRenderer
 import com.thedungeons2077.fluidmotion.scene.rain.RainRenderer
+import com.thedungeons2077.fluidmotion.scene.prism.PrismRenderer
 import com.thedungeons2077.fluidmotion.scene.sunset.SunsetRenderer
 import com.thedungeons2077.fluidmotion.scene.velocity.VelocityRenderer
 
@@ -58,7 +59,7 @@ interface Scene {
  * The wallpapers: ids (stored in settings: never rename one), names as the
  * dashboard shows them, the palette each starts in (its reference's; DATA
  * FLOW, with no reference, in ICE: cyan and violet; HORIZON and SUNSET in
- * the palettes made for them, SYNTH and OUTRUN), whether QUALITY's
+ * the palettes made for them, SYNTH and OUTRUN; PRISM in NEON), whether QUALITY's
  * [Quality.linkGlow] changes what it draws (NEURAL NET's link glow, DATA
  * FLOW's soft glows and halos, MEGACITY's window halo: AUTO CALIBRATE then
  * measures LOW apart), and
@@ -71,7 +72,8 @@ enum class SceneKind(val id: String, val label: String, val defaultPalette: Stri
     DATA_FLOW("data-flow", "DATA FLOW", "ice", true),
     MEGACITY("megacity", "MEGACITY", "neon", true),
     HORIZON("horizon", "HORIZON", "synth", false),
-    SUNSET("sunset", "SUNSET", "outrun", false);
+    SUNSET("sunset", "SUNSET", "outrun", false),
+    PRISM("prism", "PRISM", "neon", false);
 
     /** A new scene of this kind. */
     fun create(context: Context): Scene = when (this) {
@@ -82,6 +84,7 @@ enum class SceneKind(val id: String, val label: String, val defaultPalette: Stri
         MEGACITY -> MegacityRenderer(context)
         HORIZON -> HorizonRenderer(context)
         SUNSET -> SunsetRenderer(context)
+        PRISM -> PrismRenderer(context)
     }
 
     companion object {

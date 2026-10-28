@@ -24,6 +24,7 @@ The web versions were tuned on a landscape monitor. On a portrait phone, a few t
 | SUNSET sun | Scaled by the height | Scaled by the short side (the width), kept on the horizon as far up, in its radii, as on the web | Scaled by a phone's height, it would fill three quarters of the width |
 | SUNSET grid | The camera at 1 unit | The camera risen by √(how much narrower the screen is): about half the web's squares across, bigger, the same shape, moving at the same pace on screen | Rising the full ratio (all the web's squares) crowded the far rows into a haze from far below the horizon, the sun's base cut well above the grid |
 | SUNSET melt | 5% of the height below the horizon | √(composition × focal × camera height) × 5%: as far as the grid's lines crowd | So the grid fades straight into the sky, with no dark band |
+| PRISM | A 34° view on 16:9; light pools over the middle 12 units | As much across as the web's 16:9 over √(how much narrower), the view as tall as that makes it (about 62° on the S25 Ultra); the light pools over a part as much narrower | Through the web's lens an upright screen saw a slice a few blocks wide |
 
 **MEGACITY on a phone.** The reference is a phone wallpaper, so the phone has its composition: the rooftop ledge across the bottom left (the reference's figure on it was left out at the user's wish, 0.6.1). The near layers of towers are sparse enough that the violet haze shows low down, as in the reference. ZOOM grows the towers and windows; the ledge keeps its place. It starts in NEON.
 
@@ -86,10 +87,12 @@ Its shaders are the web's (`mc_*`), and the city is drawn once a second (0.7.0).
 
 On a phone the sun is sized by the width, and the camera sits higher (√ of how much narrower the screen is) for bigger squares with a clear perspective. GLOW doesn't change it (as on the web: the sun's glow is the reference's own).
 
+**PRISM** (NEON). Smoky glass blocks of many sizes from a high angle, magenta light glowing inside the glass and blue around it, thin smooth edges (each face draws its own outline: no multisampling). The camera sways a little and the lights breathe. From the dashboard's 0.23.1 (no neon tubes: the user had them removed there first). On a phone the view is taller (see the table above), so the blocks recede up the screen.
+
 ## The app
 - **The screen.** The selected wallpaper runs full screen. The brand panel `<fluid_motion>` sits top left with the time on the left and the date on the right (as the dashboard's). The controls sit in a panel at the bottom, within thumb reach, with **SET AS WALLPAPER ↗** last and largest. A tap on the wallpaper hides the controls to see it whole.
 - **Sections.**
-  - WALLPAPER: picture tiles (thumbnails rendered by the shader check), one marked ● ON HOME when it's the home screen's. The names may wrap to a second line. Up to four tiles share the width; with more (seven since 0.8.0) the row scrolls sideways, each tile wide enough for its name and ● ON HOME, opening at the chosen one.
+  - WALLPAPER: picture tiles (thumbnails rendered by the shader check), one marked ● ON HOME when it's the home screen's. The names may wrap to a second line. Up to four tiles share the width; with more (seven since 0.8.0, eight since 0.10.0) the row scrolls sideways, each tile wide enough for its name and ● ON HOME, opening at the chosen one.
   - COLOURS: that wallpaper's palette, as swatches in each palette's own colours, three to a row (eight palettes: 3, 3, 2).
   - GLOW (shown for every wallpaper; SUNSET ignores it: F7 may hide it there).
   - ZOOM: that wallpaper's zoom, − value + RESET (each button named for TalkBack, the value read out as it changes); or pinch the preview.

@@ -28,7 +28,7 @@ fluid_motion runs **cyberdeck_terminal**'s wallpapers (`~/projects/cyberdeck_ter
   - **What's done with it:** their numbers decide the tuning, and are recorded in CHANGELOG and ARCHITECTURE.md § Measurements.
 - **One phase at a time,** agreed first (F1–F5, then the plan of 2026-10-27):
   - F6: measure HORIZON and SUNSET, and tune;
-  - F7: an aesthetics audit of all seven against the web, with before/after pictures and their cost, the user picking what to build.
+  - F7: an aesthetics audit of all eight against the web, with before/after pictures and their cost, the user picking what to build.
 - **Ask before anything public:** every push and every release. Committing locally is fine.
 
 ## Battery and smoothness: the rules

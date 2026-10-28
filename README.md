@@ -1,6 +1,6 @@
 # fluid_motion
 
-Seven live wallpapers for Android, from the [cyberdeck_terminal](https://thedungeons2077.github.io/cyberdeck_terminal/) dashboard:
+Eight live wallpapers for Android, from the [cyberdeck_terminal](https://thedungeons2077.github.io/cyberdeck_terminal/) dashboard:
 
 - **MATRIX RAIN**: columns of glyphs falling in three depths, glowing heads, long fading trails.
 - **NEURAL NET**: a drifting plexus of glowing nodes; signals run along its links.
@@ -9,6 +9,7 @@ Seven live wallpapers for Android, from the [cyberdeck_terminal](https://thedung
 - **MEGACITY**: a city of towers in blue haze at night, seen from a rooftop ledge; windows go on and off, signs flicker, drones cross.
 - **HORIZON**: a glowing wireframe land running to a hot pink horizon, gliding toward you.
 - **SUNSET**: the striped outrun sun over a glowing grid that glides toward you, under the stars.
+- **PRISM**: smoky glass blocks lit magenta and blue from inside.
 
 Each comes in eight colour palettes (the dashboard's: PHOSPHOR, AMBER, ICE, NEON, BLOOD, AZURE, SYNTH and OUTRUN).
 

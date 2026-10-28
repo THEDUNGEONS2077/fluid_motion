@@ -24,6 +24,14 @@ import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
 import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
 import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
 import com.thedungeons2077.fluidmotion.lib.flow.flowTones
+import com.thedungeons2077.fluidmotion.lib.prism.PrismCamera
+import com.thedungeons2077.fluidmotion.lib.prism.PrismFrame
+import com.thedungeons2077.fluidmotion.lib.prism.PrismMotion
+import com.thedungeons2077.fluidmotion.lib.prism.PrismParams
+import com.thedungeons2077.fluidmotion.lib.prism.PrismTones
+import com.thedungeons2077.fluidmotion.lib.prism.PrismView
+import com.thedungeons2077.fluidmotion.lib.prism.buildField
+import com.thedungeons2077.fluidmotion.lib.prism.cubeVertices
 import com.thedungeons2077.fluidmotion.lib.horizon.HorizonParams
 import com.thedungeons2077.fluidmotion.lib.horizon.HorizonTones
 import com.thedungeons2077.fluidmotion.lib.horizon.HorizonView
@@ -370,6 +378,41 @@ class FrameDumpTest {
             .done()
         File(out, name).writeText(json)
         assertTrue(land.rows > 0 && land.cols > 2)
+    }
+
+    @Test
+    fun `prism as the phone draws it`() {
+        dumpPrism(1f, "prism.json")
+        // Zoomed in (150%): a narrower view, the blocks larger.
+        dumpPrism(1.5f, "prism-zoom.json")
+    }
+
+    /** PRISM at [zoom], to [name]: twelve seconds in, the camera, the blocks back to front, the lights; framed at full resolution and at LOW. */
+    private fun dumpPrism(zoom: Float, name: String) {
+        val p = PrismParams
+        val tones = PrismTones(Palettes.NEON.colors)
+        val glow = p.GLOW.getValue(GlowLevel.HIGH)
+        val full = PrismView(w.toFloat(), h.toFloat(), density, zoom)
+        val field = buildField(Rng(20261028), full.lightView)
+        val motion = PrismMotion(field)
+        repeat(12 * 30) { motion.advance(1f / 30f) }
+        val camera = PrismCamera()
+        camera.update(motion, full.aspect, full.fov)
+        val frame = PrismFrame(field)
+        frame.pack(camera, motion, tones, glow.light)
+        val lowScale = Quality.LOW.scale(density)
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("lowScale", lowScale)
+            .num("density", density).num("densityLow", density * lowScale).num("aspect", full.aspect)
+            .floats("viewProj", camera.viewProj).floats("eye", camera.eye)
+            .floats("boxes", frame.sorted).num("count", field.count.toFloat())
+            .floats("lightPos", frame.lightPos, frame.lights * 4).floats("lightCol", frame.lightCol, frame.lights * 3).num("lights", frame.lights.toFloat())
+            .floats("cube", cubeVertices())
+            .num("alpha", p.GLASS_FRONT).num("fresnel", p.FRESNEL).num("edgeW", p.EDGE_WIDTH).num("edgeGlow", p.EDGE_GLOW).num("glowAmt", glow.edge).num("light", glow.light).num("far", p.DISTANCE * 2f)
+            .raw("tones", Json().floats("navy", tones.navy).floats("magenta", tones.magenta).floats("blue", tones.blue).floats("edge", tones.edge).done())
+            .done()
+        File(out, name).writeText(json)
+        assertTrue(field.count > 100 && frame.lights > 0)
     }
 
     @Test

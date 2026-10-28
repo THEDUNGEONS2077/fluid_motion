@@ -846,6 +846,67 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     snapshot(name, `${low ? `LOW: drawn ${w}×${h}; ` : ''}camera ${v.camH.toFixed(2)} up, sun r ${v.sunR.toFixed(0)} px;`);
   }
 
+  // --- PRISM (scene/prism/PrismRenderer.kt) --------------------------------------------
+  function prism(d, low = false, name = low ? 'prism-low' : 'prism') {
+    const target = scaledTarget(low ? d.lowScale : 1);
+    const t = d.tones;
+    const back = program('pr_full.vert', 'pr_back.frag');
+    const box = program('pr_box.vert', 'pr_box.frag');
+    // build: the cube per vertex (corner, normal), the blocks per instance (min corner, size), in back-to-front order.
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(d.cube), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(d.boxes), gl.STREAM_DRAW);
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 24, 0);
+    gl.vertexAttribDivisor(2, 1);
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 3, gl.FLOAT, false, 24, 12);
+    gl.vertexAttribDivisor(3, 1);
+    gl.bindVertexArray(null);
+    // render: what's behind the glass, then the blocks, premultiplied.
+    target.begin();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    back.use();
+    gl.uniform3fv(back.u('uBg'), new Float32Array(t.navy));
+    gl.uniform3fv(back.u('uAccent'), new Float32Array(t.magenta));
+    gl.uniform3fv(back.u('uCool'), new Float32Array(t.blue));
+    gl.uniform2f(back.u('uAspect'), d.aspect, 1);
+    gl.uniform1f(back.u('uLight'), d.light);
+    fullScreen();
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    box.use();
+    gl.uniformMatrix4fv(box.u('uViewProj'), false, new Float32Array(d.viewProj));
+    gl.uniform4fv(box.u('uLightPos'), new Float32Array(d.lightPos));
+    gl.uniform3fv(box.u('uLightCol'), new Float32Array(d.lightCol));
+    gl.uniform1i(box.u('uLights'), d.lights);
+    gl.uniform3fv(box.u('uEye'), new Float32Array(d.eye));
+    gl.uniform3fv(box.u('uBody'), new Float32Array(t.navy));
+    gl.uniform3fv(box.u('uEdge'), new Float32Array(t.edge));
+    gl.uniform1f(box.u('uAlpha'), d.alpha);
+    gl.uniform1f(box.u('uFresnel'), d.fresnel);
+    gl.uniform1f(box.u('uDensity'), low ? d.densityLow : d.density);
+    gl.uniform1f(box.u('uEdgeW'), d.edgeW);
+    gl.uniform1f(box.u('uEdgeGlow'), d.edgeGlow);
+    gl.uniform1f(box.u('uGlowAmt'), d.glowAmt);
+    gl.uniform1f(box.u('uFar'), d.far);
+    gl.bindVertexArray(vao);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, d.count);
+    gl.bindVertexArray(null);
+    gl.disable(gl.BLEND);
+    target.end();
+    snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${d.count} blocks, ${d.lights} lights;`);
+  }
+
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
   const runs = [
     ['rain', () => rain(dumps.rain, 'rain')],
@@ -871,6 +932,9 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     ['sunset', () => sunset(dumps.sunset)],
     ['sunset-low', () => sunset(dumps.sunset, true)],
     ['sunset-zoom', () => sunset(dumps['sunset-zoom'], false, 'sunset-zoom')],
+    ['prism', () => prism(dumps.prism)],
+    ['prism-low', () => prism(dumps.prism, true)],
+    ['prism-zoom', () => prism(dumps['prism-zoom'], false, 'prism-zoom')],
   ];
   for (const [name, fn] of runs) {
     try {

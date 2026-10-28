@@ -152,3 +152,8 @@ class HorizonService : FluidWallpaperService() {
 class SunsetService : FluidWallpaperService() {
     override val kind = SceneKind.SUNSET
 }
+
+/** PRISM. */
+class PrismService : FluidWallpaperService() {
+    override val kind = SceneKind.PRISM
+}

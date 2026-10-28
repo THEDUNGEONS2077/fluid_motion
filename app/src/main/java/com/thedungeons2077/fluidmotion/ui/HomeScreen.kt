@@ -494,4 +494,5 @@ private fun thumbnail(kind: SceneKind): Int = when (kind) {
     SceneKind.MEGACITY -> R.drawable.thumb_megacity
     SceneKind.HORIZON -> R.drawable.thumb_horizon
     SceneKind.SUNSET -> R.drawable.thumb_sunset
+    SceneKind.PRISM -> R.drawable.thumb_prism
 }

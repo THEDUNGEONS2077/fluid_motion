@@ -105,5 +105,16 @@
             </intent-filter>
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_sunset" />
         </service>
+
+        <service
+            android:name=".wallpaper.PrismService"
+            android:exported="true"
+            android:label="@string/prism_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_prism" />
+        </service>
     </application>
 </manifest>

@@ -3,12 +3,12 @@
 ## Layers
 ```
 app/src/main/java/com/thedungeons2077/fluidmotion/
-  lib/        pure Kotlin: palettes, power rules, the seven wallpapers' simulations, framing and per-frame packing   (unit tested)
+  lib/        pure Kotlin: palettes, power rules, the eight wallpapers' simulations, framing and per-frame packing   (unit tested)
   gl/         EGL context (low GPU priority), shader programs, instance buffers
-  scene/      the seven renderers (one Scene each) and the rain's glyph atlas
+  scene/      the eight renderers (one Scene each) and the rain's glyph atlas
   render/     RenderLoop (thread, EGL surface, frame pacing), PowerWatch (battery saver, heat)
   settings/   SharedPreferences ("fluid_motion")
-  wallpaper/  FluidWallpaperService + one subclass per wallpaper (seven picker entries)
+  wallpaper/  FluidWallpaperService + one subclass per wallpaper (eight picker entries)
   ui/         MainActivity, the Compose screen in cyberdeck_terminal's style
 app/src/main/assets/shaders/   GLSL ES 3.00 (shared with tools/shader-check)
 tools/shader-check/            the shaders run in WebGL2 with dumped frames
@@ -131,6 +131,7 @@ Each release that could change the cost is measured on the phone by the user (AU
   - **GPU:** 5.09 → **0.93 ms** at ULTRA, and AUTO CALIBRATE now picks ULTRA.
   - **MEASURE IMPACT:** +32 / +30 / +71 mA (−35% at BALANCED, −42% at SMOOTH).
   - **Heaviest now:** VELOCITY (2.08 ms) and the rain (1.49 ms). VELOCITY is light on the battery all the same (+16 mA at BALANCED), so it was left as it is.
+- **0.10.0: PRISM** (new) waits for its first AUTO CALIBRATE and MEASURE IMPACT. Each frame: one full-screen pass, then about 190 blocks (36 vertices each) in one instanced draw, blended back to front (up to three layers of glass deep), with 10 light pools per pixel; the CPU sorts and packs them (an insertion sort into an order kept between frames).
 - **0.8.1: HORIZON and SUNSET, first measured (F6, 2026-10-28).** Both at ULTRA, battery saver on, 60 fps asked and drawn, no late frames:
 
     | Wallpaper (palette, glow) | CPU | GPU | ECO 24 | BALANCED 30 | SMOOTH 60 |

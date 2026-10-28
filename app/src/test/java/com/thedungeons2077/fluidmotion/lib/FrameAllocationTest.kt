@@ -28,6 +28,13 @@ import com.thedungeons2077.fluidmotion.lib.rain.RainRecorder
 import com.thedungeons2077.fluidmotion.lib.rain.RainSim
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.rain.glyphSlots
+import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.prism.PrismCamera
+import com.thedungeons2077.fluidmotion.lib.prism.PrismFrame
+import com.thedungeons2077.fluidmotion.lib.prism.PrismMotion
+import com.thedungeons2077.fluidmotion.lib.prism.PrismTones
+import com.thedungeons2077.fluidmotion.lib.prism.PrismView
+import com.thedungeons2077.fluidmotion.lib.prism.buildField
 import com.thedungeons2077.fluidmotion.lib.sunset.SunsetView
 import com.thedungeons2077.fluidmotion.lib.sunset.advanceTravel
 import com.thedungeons2077.fluidmotion.lib.velocity.VelocityFrame
@@ -87,6 +94,23 @@ class FrameAllocationTest {
             travel = advanceTravel(travel, 1f / 30f, view.speed)
         }
         assertTrue(travel >= 0f)
+    }
+
+    @Test
+    fun prism() {
+        val view = PrismView(w * density, h * density, density, 1f)
+        val field = buildField(Rng(5), view.lightView)
+        val motion = PrismMotion(field)
+        val frame = PrismFrame(field)
+        val camera = PrismCamera()
+        val tones = PrismTones(Palettes.NEON.colors)
+        weigh("prism") {
+            // PrismRenderer's frame: the motion on, the camera, the blocks sorted and packed, the lights.
+            motion.advance(1f / 30f)
+            camera.update(motion, view.aspect, view.fov)
+            frame.pack(camera, motion, tones, 1f)
+        }
+        assertTrue(frame.lights > 0)
     }
 
     @Test
