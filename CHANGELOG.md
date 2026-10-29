@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0 (build 16)
+From the looks audit, the three fixes you picked:
+- **HORIZON's sky is smooth.** Its glow faded over a few dozen shades of dark red, which an OLED shows as faint rings. A fine, still grain of half a shade now hides them. It costs next to nothing, and the dashboard's HORIZON is unchanged.
+- **HORIZON's sun is bigger on a phone,** about twice the size, glow included. Sized by a tall screen's narrow width, it had been a small dot.
+- **DATA FLOW never comes out in one colour.** At least a fifth of every board's traces are now violet (in ICE). By chance, about 1 board in 14 had been all cyan. The dashboard's boards follow the same rule.
+
 ## 0.11.0 (build 15)
 - **PRISM runs on slower phones.** At QUALITY LOW and MEDIUM it now draws with lighter shaders: the light pools are worked out at the corners of a fine grid on each glass face, not at every pixel. That was most of its work. It looks the same (within a shade on 99.6% of the screen) for under half the cost. HIGH and ULTRA are exactly as before, and so is the dashboard's PRISM.
 - **AUTO picks a rate for each wallpaper.** Before, one wallpaper over budget (PRISM, on your S25 Ultra) slowed every wallpaper to ECO. Now only that wallpaper drops to ECO, and the rest stay at BALANCED. Calibrate again to get it.

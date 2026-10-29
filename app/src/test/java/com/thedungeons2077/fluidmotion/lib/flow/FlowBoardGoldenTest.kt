@@ -1,6 +1,7 @@
 /*
  * FlowBoardGoldenTest: the board is cyberdeck_terminal's, rule for rule.
- * Given the same random numbers, src/wallpaper/data-flow/board.ts (0.9.0)
+ * Given the same random numbers, src/wallpaper/data-flow/board.ts (0.26.0:
+ * regenerated for balanceHues; seeds 1 and 3 were short of cool traces)
  * lays out the boards below; the port must lay out the same ones, chip
  * for chip and trace for trace. A board is compared by a CRC32 of its
  * layout (each chip's place, size and pins; each trace's points, hue,
@@ -25,9 +26,9 @@ class FlowBoardGoldenTest {
     private class Golden(val w: Float, val h: Float, val seed: Int, val traces: Int, val crc: Long, val widths: Float)
 
     private val goldens = listOf(
-        Golden(384f, 832f, 1, 27, 0x052be764L, 31.3219f),
+        Golden(384f, 832f, 1, 27, 0x76662e0fL, 31.3219f),
         Golden(384f, 832f, 2, 28, 0xacb56a49L, 36.4999f),
-        Golden(360f, 640f, 3, 30, 0x064f1968L, 37.6689f),
+        Golden(360f, 640f, 3, 30, 0x85ef6437L, 37.6689f),
         Golden(1280f, 800f, 4, 47, 0x50ff9f09L, 55.7085f),
         Golden(1920f, 1080f, 5, 72, 0x855b7bb3L, 86.1642f),
     )

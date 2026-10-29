@@ -81,6 +81,15 @@ object HorizonParams {
      * screen's short side: PHONE, the web's height, which is its short side).
      */
     const val SUN_LIFT = 0.016f
+
+    /**
+     * PHONE: how much bigger the sun (its core, glow and lift) is on a
+     * narrower screen: (how much narrower) to this power (HorizonView
+     * sunScale). Sized from the short side, a tall phone's sun came out a
+     * small dot (the user's choice, 2026-10-29, F7: bigger); the square
+     * root, as the cells and SUNSET's camera. The haze dome keeps its size.
+     */
+    const val SUN_NARROW_POWER = 0.5f
     const val SUN_CORE = 0.011f
     const val SUN_GLOW = 0.22f
     const val DOME_RX = 0.26f * REFERENCE_ASPECT

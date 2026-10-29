@@ -1,10 +1,12 @@
 /*
  * scene/horizon/HorizonRenderer.kt: HORIZON on the GPU: a wireframe land
  * running to a glowing horizon, the camera gliding forward over it, drawn
- * with cyberdeck_terminal's own shaders (hz_*: one set, byte for byte).
+ * with cyberdeck_terminal's own shaders (hz_*: one set, byte for byte),
+ * but for the sky: the phone's own horizon_sky.frag, hz_sky.frag plus a
+ * dither against banding on an OLED (0.12.0; the dashboard's is untouched).
  *
  * Layer: scene (GL). One pass, four draw calls at most:
- *   1. the sky (hz_sky.frag: the plum sky, the glow and its haze dome, the
+ *   1. the sky (horizon_sky.frag, hz_sky.frag dithered: the plum sky, the glow and its haze dome, the
  *      white core), over the top half only. The web draws it once and keeps
  *      it; a phone's screen doesn't keep its last picture, and reading a
  *      kept copy back every frame costs more battery (memory traffic) than
@@ -45,7 +47,7 @@ import kotlin.math.max
 
 /** The HORIZON scene. */
 class HorizonRenderer(context: Context) : Scene {
-    private val sky = GlProgram(context.assets, "hz_full.vert", "hz_sky.frag")
+    private val sky = GlProgram(context.assets, "hz_full.vert", "horizon_sky.frag")
     private val land = GlProgram(context.assets, "hz_land.vert", "hz_land.frag")
     private val empty = EmptyVao()
     private val target = ScaledTarget(context.assets)
@@ -173,12 +175,12 @@ class HorizonRenderer(context: Context) : Scene {
             prog.use()
             GLES30.glUniform2f(prog.u("uTarget"), target.width.toFloat(), target.height.toFloat())
             GLES30.glUniform2f(prog.u("uSun"), v.sunX, v.sunY)
-            GLES30.glUniform1f(prog.u("uGlowR"), v.short * p.SUN_GLOW * g.sun)
+            GLES30.glUniform1f(prog.u("uGlowR"), v.short * v.sunScale * p.SUN_GLOW * g.sun)
             GLES30.glUniform2f(prog.u("uDome"), v.short * p.DOME_RX, v.short * p.DOME_RY)
             GLES30.glUniform3fv(prog.u("uSkyTop"), 1, tones.skyTop, 0)
             GLES30.glUniform3fv(prog.u("uSkyLow"), 1, tones.skyLow, 0)
             GLES30.glUniform3fv(prog.u("uGlow"), 1, tones.glow, 0)
-            GLES30.glUniform1f(prog.u("uCoreR"), v.short * p.SUN_CORE)
+            GLES30.glUniform1f(prog.u("uCoreR"), v.short * v.sunScale * p.SUN_CORE)
             GLES30.glUniform3fv(prog.u("uCore"), 1, tones.core, 0)
         }
         land.use()

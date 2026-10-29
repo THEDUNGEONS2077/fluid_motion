@@ -166,9 +166,12 @@ class HorizonView(val width: Float, val height: Float, val pxPerDp: Float, val z
     /** The screen's short side (px): the composition's scale (the web's height, on its 16:9). */
     val short: Float = min(width, height)
 
+    /** PHONE: how much bigger the sun is than on the web's 16:9 (1 there; √narrow, about 1.96, on an upright S25 Ultra). */
+    val sunScale: Float = max(1f, narrow).pow(p.SUN_NARROW_POWER)
+
     /** The glow's centre (px from the top-left): just above the horizon. */
     val sunX: Float = width * 0.5f
-    val sunY: Float = horizon - short * p.SUN_LIFT
+    val sunY: Float = horizon - short * p.SUN_LIFT * sunScale
 
     /** How much smaller than the web's the cells are (and the camera's pace): narrow to HorizonParams.CELL_NARROW_POWER. */
     val shrink: Float = narrow.pow(p.CELL_NARROW_POWER)

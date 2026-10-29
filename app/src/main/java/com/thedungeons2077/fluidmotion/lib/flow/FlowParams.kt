@@ -60,6 +60,15 @@ object FlowParams {
     /** Share of buses and loose traces in the cool hue. */
     const val COOL_SHARE = 0.3f
 
+    /**
+     * The least share of a board's traces (by length) in the cool hue
+     * (0.12.0, with the web's 0.26.0): a few big buses decide most of a
+     * board, so by chance about 1 board in 14 came out almost one colour;
+     * a board short of it turns its smallest warm buses and loose traces
+     * cool until it isn't (FlowBoard balanceHues).
+     */
+    const val MIN_COOL_SHARE = 0.2f
+
     /** Trace widths (dp): signal traces, the odd heavy power trace (its share). */
     val TRACE_WIDTH = Span(0.9f, 1.5f)
     const val POWER_WIDTH = 2.6f

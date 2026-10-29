@@ -48,12 +48,16 @@ class Trace(
     val pts: IntArray,
     val len: FloatArray,
     val width: Float,
-    val cool: Boolean,
+    cool: Boolean,
     val start: End,
     val end: End,
     val chip: Int,
     val bus: Int,
 ) {
+    /** In the palette's cool hue (else warm); a board short of cool traces turns some (FlowBoard balanceHues), once, as it's laid out. */
+    var cool: Boolean = cool
+        internal set
+
     /** Its whole length (grid units). */
     val length: Float get() = len[len.size - 1]
 
@@ -391,7 +395,33 @@ private class Builder(private val w: Float, private val h: Float, private val rn
             val end = if (route.end == End.EDGE) End.EDGE else if (rng.next() < 0.3f) End.PAD else End.VIA
             addTrace(route.pts, width, cool, start, end, -1, -1)
         }
+        balanceHues()
         return FlowBoard(w, h, cols, rows, chips, traces, buses)
+    }
+
+    /**
+     * Makes sure at least MIN_COOL_SHARE of the traces' length is cool: if
+     * not, the warm buses and loose traces (a bus turns as one) turn cool,
+     * smallest first (so as little changes as needed), until it is. No
+     * random numbers: every other draw, and so the rest of the board, is as
+     * before. As the web's balanceHues, step for step.
+     */
+    private fun balanceHues() {
+        val total = traces.sumOf { it.length.toDouble() }
+        var cool = traces.sumOf { if (it.cool) it.length.toDouble() else 0.0 }
+        if (total <= 0.0 || cool >= p.MIN_COOL_SHARE * total) return
+        // The warm groups: each bus whole, each loose trace alone (in the order first met).
+        val groups = LinkedHashMap<String, MutableList<Trace>>()
+        traces.forEachIndexed { i, t ->
+            if (t.cool) return@forEachIndexed
+            groups.getOrPut(if (t.bus >= 0) "b${t.bus}" else "t$i") { mutableListOf() } += t
+        }
+        // Smallest first; equal ones keep the order they were met in (sortedBy is stable).
+        for (g in groups.values.sortedBy { g -> g.sumOf { it.length.toDouble() } }) {
+            if (cool >= p.MIN_COOL_SHARE * total) break
+            for (t in g) t.cool = true
+            cool += g.sumOf { it.length.toDouble() }
+        }
     }
 
     private companion object {

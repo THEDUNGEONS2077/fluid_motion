@@ -355,8 +355,8 @@ class FrameDumpTest {
             val t = scaled(scale)
             val v = HorizonView(t[0].toFloat(), t[1].toFloat(), density * scale * zoom, zoom)
             return Json().ints("target", t).num("density", v.density).num("focal", v.focal).num("horizon", v.horizon)
-                .floats("sun", floatArrayOf(v.sunX, v.sunY)).num("glowR", v.short * p.SUN_GLOW * glow.sun)
-                .floats("dome", floatArrayOf(v.short * p.DOME_RX, v.short * p.DOME_RY)).num("coreR", v.short * p.SUN_CORE).done()
+                .floats("sun", floatArrayOf(v.sunX, v.sunY)).num("glowR", v.short * v.sunScale * p.SUN_GLOW * glow.sun)
+                .floats("dome", floatArrayOf(v.short * p.DOME_RX, v.short * p.DOME_RY)).num("coreR", v.short * v.sunScale * p.SUN_CORE).done()
         }
         val full = HorizonView(w.toFloat(), h.toFloat(), density * zoom, zoom)
         val land = Land.build(Rng(20261026), full.cell, full.halfWidth)

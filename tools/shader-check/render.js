@@ -709,7 +709,7 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     const target = scaledTarget(low ? d.lowScale : 1);
     const v = low ? d.low : d.full;
     const t = d.tones;
-    const sky = program('hz_full.vert', 'hz_sky.frag');
+    const sky = program('hz_full.vert', 'horizon_sky.frag');
     const land = program('hz_land.vert', 'hz_land.frag');
     // sendMesh: per vertex (x, height), then (strip, row in it, depth offset, corner).
     const vao = gl.createVertexArray();
