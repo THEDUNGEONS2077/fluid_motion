@@ -24,6 +24,11 @@ import com.thedungeons2077.fluidmotion.lib.flow.FlowFrame
 import com.thedungeons2077.fluidmotion.lib.flow.FlowParams
 import com.thedungeons2077.fluidmotion.lib.flow.FlowSim
 import com.thedungeons2077.fluidmotion.lib.flow.flowTones
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelCode
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelMotion
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelParams
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelTones
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelView
 import com.thedungeons2077.fluidmotion.lib.prism.PrismCamera
 import com.thedungeons2077.fluidmotion.lib.prism.PrismFrame
 import com.thedungeons2077.fluidmotion.lib.prism.PrismMotion
@@ -379,6 +384,53 @@ class FrameDumpTest {
             .done()
         File(out, name).writeText(json)
         assertTrue(land.rows > 0 && land.cols > 2)
+    }
+
+    @Test
+    fun `quantum kernel as the phone draws it`() {
+        dumpKernel(1f, "kernel.json")
+        // Zoomed in (150%): laid out as if 1/1.5 as big, the code larger.
+        dumpKernel(1.5f, "kernel-zoom.json")
+    }
+
+    /**
+     * QUANTUM KERNEL at [zoom], to [name]: its layout, each depth's code and
+     * the specs its texture is drawn from (the harness draws them in the
+     * browser, as the dashboard does: the JVM has no Android canvas), the
+     * scroll and a line being run, part way through.
+     */
+    private fun dumpKernel(zoom: Float, name: String) {
+        val view = KernelView(w.toFloat(), h.toFloat(), density * zoom)
+        val rng = Rng(20261029)
+        val letters = KernelCode.letters(true)
+        val code = KernelParams.DEPTHS.indices.map { d -> KernelCode.write(rng, view.cols[d], view.rows[d], view.lanes[d], KernelParams.DEPTHS[d], letters) }
+        val motion = KernelMotion(view, code[KernelParams.FOCUS_DEPTH], rng)
+        // On until a line is being run, near its brightest.
+        var steps = 0
+        while ((motion.runLine < 0 || motion.runT < KernelParams.RUN_SECONDS * 0.4f) && steps < 30 * 30) {
+            motion.advance(1f / 30f)
+            steps++
+        }
+        val tones = KernelTones(Palettes.AZURE.colors)
+        val f = KernelParams.FOCUS_DEPTH
+        val run = code[f][motion.runLine]
+        val pad = KernelParams.DEPTHS[f].glowReach * 2f * view.pxPerDp
+        val top = motion.screenY(f, run.row) - pad
+        val depths = KernelParams.DEPTHS.indices.joinToString(",", "[", "]") { d ->
+            val s = KernelParams.DEPTHS[d]
+            val lines = code[d].joinToString(",", "[", "]") { l -> Json().num("r", l.row).num("c", l.col).str("t", l.text).done() }
+            Json().num("font", s.font).num("blur", s.blur).num("glowReach", s.glowReach).num("glow", s.glow).num("alpha", s.alpha)
+                .num("weight", s.weight).num("resolution", s.resolution).num("colW", view.colW[d]).num("lineH", view.lineH[d])
+                .num("loopH", view.loopH[d]).num("offset", motion.offset[d]).floats("colour", tones.tones[s.tone]).raw("lines", lines).done()
+        }
+        val json = Json()
+            .ints("screen", intArrayOf(w, h)).num("pxPerDp", view.pxPerDp).num("lowScale", Quality.LOW.scale(density)).num("glowK", KernelParams.GLOW.getValue(GlowLevel.HIGH))
+            .floats("back", tones.back).str("kana", KATAKANA)
+            .floats("runRect", floatArrayOf(run.col * view.colW[f] - pad, top, (run.col + run.text.length) * view.colW[f] + pad, top + view.lineH[f] + 2f * pad)).num("run", motion.runStrength)
+            .raw("depths", depths)
+            .done()
+        File(out, name).writeText(json)
+        assertTrue(code.all { it.isNotEmpty() } && motion.runLine >= 0)
     }
 
     @Test

@@ -88,6 +88,8 @@ Its shaders are the web's (`mc_*`), and the city is drawn once a second (0.7.0).
 
 On a phone the sun is sized by the width, and the camera sits higher (√ of how much narrower the screen is) for bigger squares with a clear perspective. GLOW doesn't change it (as on the web: the sun's glow is the reference's own).
 
+**QUANTUM KERNEL** (AZURE). Five depths of code on true black, in the rain's glyphs (mirrored katakana, digits, its symbols as operators), laid out as code: lanes of indented blocks. Small dim code far back, sharper nearer, big bold glowing code in focus, a few huge lines blurred in front. Each scrolls up at its own pace, nearer faster; about every 1.4 s a line in focus lights up as if run. The dashboard's as of its 0.27.1 (the user: "It's perfect"). On a phone: as many lanes as fit at the dashboard's lane width (the far depth 2, the others 1), so the code is as dense; the frame is one pass (the dashboard copies five sheets).
+
 **PRISM** (NEON). Smoky glass blocks of many sizes from a high angle, magenta light glowing inside the glass and blue around it, thin smooth edges (each face draws its own outline: no multisampling). The camera sways a little and the lights breathe. From the dashboard's 0.23.1 (no neon tubes: the user had them removed there first). On a phone the view is taller (see the table above), so the blocks recede up the screen.
 
 ## The app

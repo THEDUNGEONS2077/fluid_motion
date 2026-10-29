@@ -29,6 +29,10 @@ import com.thedungeons2077.fluidmotion.lib.rain.RainSim
 import com.thedungeons2077.fluidmotion.lib.rain.Rng
 import com.thedungeons2077.fluidmotion.lib.rain.glyphSlots
 import com.thedungeons2077.fluidmotion.lib.Palettes
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelCode
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelMotion
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelParams
+import com.thedungeons2077.fluidmotion.lib.kernel.KernelView
 import com.thedungeons2077.fluidmotion.lib.prism.PrismCamera
 import com.thedungeons2077.fluidmotion.lib.prism.PrismFrame
 import com.thedungeons2077.fluidmotion.lib.prism.PrismMotion
@@ -111,6 +115,22 @@ class FrameAllocationTest {
             frame.pack(camera, motion, tones, 1f)
         }
         assertTrue(frame.lights > 0)
+    }
+
+    @Test
+    fun `quantum kernel`() {
+        val view = KernelView(w * density, h * density, density)
+        val rng = Rng(5)
+        val letters = KernelCode.letters(true)
+        val focus = KernelCode.write(rng, view.cols[KernelParams.FOCUS_DEPTH], view.rows[KernelParams.FOCUS_DEPTH], view.lanes[KernelParams.FOCUS_DEPTH], KernelParams.DEPTHS[KernelParams.FOCUS_DEPTH], letters)
+        val motion = KernelMotion(view, focus, rng)
+        var lit = 0f
+        weigh("quantum kernel") {
+            // KernelRenderer's frame: the loops scroll, a line is run now and then, and its strength read.
+            motion.advance(1f / 30f)
+            lit += motion.runStrength
+        }
+        assertTrue(lit >= 0f)
     }
 
     @Test

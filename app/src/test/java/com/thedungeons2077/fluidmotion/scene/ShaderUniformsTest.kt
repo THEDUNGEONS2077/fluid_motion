@@ -35,7 +35,7 @@ class ShaderUniformsTest {
     fun `renderers and shaders agree on every uniform`() {
         val renderers = File(main, "java/com/thedungeons2077/fluidmotion/scene").walk().filter { it.name.endsWith("Renderer.kt") }.toList() +
             File(main, "java/com/thedungeons2077/fluidmotion/gl/ScaledTarget.kt")
-        assertTrue("found the renderers", renderers.size == 9)
+        assertTrue("found the renderers", renderers.size == 10)
         val problems = mutableListOf<String>()
         var programCount = 0
         var uniformCount = 0
@@ -64,8 +64,8 @@ class ShaderUniformsTest {
             }
         }
         println("programs $programCount, uniforms $uniformCount")
-        // Not vacuous: rain 3 programs, neural 3, velocity 4, data flow 4, megacity 5 (its city cache's copy too), horizon 2, sunset 2, prism 3 (its lighter pair too), the upscale 1, and their uniforms all looked at.
-        assertTrue("programs found: $programCount", programCount == 27)
+        // Not vacuous: rain 3 programs, neural 3, velocity 4, data flow 4, megacity 5 (its city cache's copy too), horizon 2, sunset 2, prism 3 (its lighter pair too), quantum kernel 1, the upscale 1, and their uniforms all looked at.
+        assertTrue("programs found: $programCount", programCount == 28)
         assertTrue("uniforms checked: $uniformCount", uniformCount > 120)
         assertTrue(problems.joinToString("\n"), problems.isEmpty())
     }

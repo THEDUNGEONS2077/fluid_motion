@@ -116,5 +116,16 @@
             </intent-filter>
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_prism" />
         </service>
+
+        <service
+            android:name=".wallpaper.KernelService"
+            android:exported="true"
+            android:label="@string/quantum_kernel_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_quantum_kernel" />
+        </service>
     </application>
 </manifest>

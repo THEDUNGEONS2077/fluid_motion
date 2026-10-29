@@ -909,6 +909,95 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     snapshot(name, `${low ? `LOW: drawn ${target.width}×${target.height}; ` : ''}${lite ? 'the lighter shaders; ' : ''}${d.count} blocks, ${d.lights} lights;`);
   }
 
+  /**
+   * QUANTUM KERNEL (KernelRenderer.kt): each depth's code drawn into a
+   * one-channel texture of its coverage (the phone draws it with Android
+   * Canvas; here canvas text with blur(σ), as the dashboard does), glow and
+   * blur baked in, then the whole frame in one pass (kernel.frag). `low`:
+   * the textures at LOW's share of the resolution.
+   */
+  function kernel(d, low = false, name = low ? 'kernel-low' : 'kernel') {
+    const prog = program('fullscreen.vert', 'kernel.frag');
+    const kana = new Set(fonts.kana ? [...d.kana] : []);
+    const textures = d.depths.map((s) => {
+      const scale = (low ? d.lowScale : 1) * s.resolution;
+      const reach = s.glowReach * d.glowK * d.pxPerDp * scale;
+      const c = new OffscreenCanvas(Math.max(1, Math.ceil(W * scale)), Math.max(1, Math.ceil(s.loopH * scale)));
+      const x = c.getContext('2d');
+      // The passes, as the renderer's: a wide glow, a tight one, then the glyphs (σ in texture px, opacity), all added.
+      const passes = [];
+      if (reach > 0 && s.glow > 0) passes.push([reach * 0.5, Math.min(1, s.glow * d.glowK * 0.7)], [reach * 0.15, Math.min(1, s.glow * d.glowK * 0.8)]);
+      passes.push([s.blur * d.pxPerDp * scale, s.alpha]);
+      x.globalCompositeOperation = 'lighter';
+      for (const [sigma, alpha] of passes) {
+        const layer = new OffscreenCanvas(c.width, c.height);
+        const l = layer.getContext('2d');
+        l.scale(scale, scale);
+        l.font = `${s.font * d.pxPerDp}px JBMono, Kana`;
+        l.textAlign = 'center';
+        l.textBaseline = 'middle';
+        l.fillStyle = '#fff';
+        l.strokeStyle = '#fff';
+        l.lineWidth = s.weight * d.pxPerDp;
+        for (const line of s.lines) {
+          for (const shift of [-s.loopH, 0, s.loopH]) {
+            const cy = (line.r + 0.5) * s.lineH + shift;
+            if (cy < -s.lineH * 3 || cy > s.loopH + s.lineH * 3) continue;
+            [...line.t].forEach((ch, i) => {
+              if (ch === ' ') return;
+              const cx = (line.c + i + 0.5) * s.colW;
+              if (cx > W + s.colW) return;
+              l.save();
+              if (kana.has(ch)) {
+                l.translate(cx, cy);
+                l.scale(-1, 1);
+                l.translate(-cx, -cy);
+              }
+              l.fillText(ch, cx, cy);
+              if (s.weight > 0) l.strokeText(ch, cx, cy);
+              l.restore();
+            });
+          }
+        }
+        x.filter = sigma > 0.3 ? `blur(${sigma}px)` : 'none';
+        x.globalAlpha = alpha;
+        x.drawImage(layer, 0, 0);
+      }
+      // Its coverage (alpha) as the one channel, as the phone uploads it.
+      const px = x.getImageData(0, 0, c.width, c.height).data;
+      const a = new Uint8Array(c.width * c.height);
+      for (let i = 0; i < a.length; i++) a[i] = px[i * 4 + 3];
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, c.width, c.height, 0, gl.RED, gl.UNSIGNED_BYTE, a);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      return t;
+    });
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, W, H);
+    gl.disable(gl.BLEND);
+    prog.use();
+    textures.forEach((t, i) => {
+      gl.activeTexture(gl.TEXTURE0 + i);
+      gl.bindTexture(gl.TEXTURE_2D, t);
+    });
+    for (let i = 0; i < 5; i++) gl.uniform1i(prog.u(`uDepth${i}`), i);
+    gl.uniform1fv(prog.u('uOffset'), new Float32Array(d.depths.map((s) => s.offset)));
+    gl.uniform1fv(prog.u('uLoopH'), new Float32Array(d.depths.map((s) => s.loopH)));
+    gl.uniform3fv(prog.u('uColour'), new Float32Array(d.depths.flatMap((s) => s.colour)));
+    gl.uniform2f(prog.u('uScreen'), W, H);
+    gl.uniform3fv(prog.u('uBack'), new Float32Array(d.back));
+    gl.uniform4fv(prog.u('uRunRect'), new Float32Array(d.runRect));
+    gl.uniform1f(prog.u('uRun'), d.run);
+    fullScreen();
+    gl.activeTexture(gl.TEXTURE0);
+    snapshot(name, `${low ? 'LOW textures; ' : ''}${d.depths.map((s) => s.lines.length).join('/')} lines a depth, a line run at ${d.run.toFixed(2)};`);
+  }
+
   // Each scene at full resolution, then at LOW (scaled up: gl/ScaledTarget.kt, the rain's own layer).
   const runs = [
     ['rain', () => rain(dumps.rain, 'rain')],
@@ -939,6 +1028,9 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     // Full resolution with the lighter pair: compared with 'prism', it should match to within a step of colour.
     ['prism-lite', () => prism(dumps.prism, false, 'prism-lite', true)],
     ['prism-zoom', () => prism(dumps['prism-zoom'], false, 'prism-zoom')],
+    ['kernel', () => kernel(dumps.kernel)],
+    ['kernel-low', () => kernel(dumps.kernel, true)],
+    ['kernel-zoom', () => kernel(dumps['kernel-zoom'], false, 'kernel-zoom')],
   ];
   for (const [name, fn] of runs) {
     try {

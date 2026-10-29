@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0 (build 17)
+- **New wallpaper: QUANTUM KERNEL,** from the dashboard: layers of code at five depths on true black, written in MATRIX RAIN's glyphs.
+  - **The depths:** small, dim code far back; sharper code nearer; big, bold, glowing code in focus; a few huge lines blurred up front.
+  - **The motion:** each depth scrolls up, the nearer ones faster. Now and then a line in focus lights up as if it's being run.
+  - **On a phone:** the code is as dense as on the dashboard (fewer columns side by side on the narrow screen, each as wide). It starts in AZURE.
+  - **Battery:** each depth is drawn once, glow and blur included, and a frame is one pass over the screen. A new palette costs nothing; QUALITY draws the depths smaller.
+
 ## 0.12.0 (build 16)
 From the looks audit, the three fixes you picked:
 - **HORIZON's sky is smooth.** Its glow faded over a few dozen shades of dark red, which an OLED shows as faint rings. A fine, still grain of half a shade now hides them. It costs next to nothing, and the dashboard's HORIZON is unchanged.

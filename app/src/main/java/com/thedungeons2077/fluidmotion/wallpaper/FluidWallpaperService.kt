@@ -157,3 +157,8 @@ class SunsetService : FluidWallpaperService() {
 class PrismService : FluidWallpaperService() {
     override val kind = SceneKind.PRISM
 }
+
+/** QUANTUM KERNEL. */
+class KernelService : FluidWallpaperService() {
+    override val kind = SceneKind.QUANTUM_KERNEL
+}

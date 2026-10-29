@@ -55,6 +55,7 @@ import com.thedungeons2077.fluidmotion.wallpaper.MatrixRainService
 import com.thedungeons2077.fluidmotion.wallpaper.HorizonService
 import com.thedungeons2077.fluidmotion.wallpaper.MegacityService
 import com.thedungeons2077.fluidmotion.wallpaper.NeuralNetService
+import com.thedungeons2077.fluidmotion.wallpaper.KernelService
 import com.thedungeons2077.fluidmotion.wallpaper.PrismService
 import com.thedungeons2077.fluidmotion.wallpaper.SunsetService
 import com.thedungeons2077.fluidmotion.wallpaper.VelocityService
@@ -632,6 +633,7 @@ class HomeState(private val context: Context, private val settings: Settings, pr
         SceneKind.HORIZON -> HorizonService::class.java
         SceneKind.SUNSET -> SunsetService::class.java
         SceneKind.PRISM -> PrismService::class.java
+        SceneKind.QUANTUM_KERNEL -> KernelService::class.java
     }
 }
 

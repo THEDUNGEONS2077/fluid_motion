@@ -3,7 +3,7 @@
 Read [WORKING.md](WORKING.md) (how we work: the user's method, the battery bar, the look they want), [ARCHITECTURE.md](ARCHITECTURE.md) (layers, the render loop, the battery rules, the S25 measurements) and [DESIGN.md](DESIGN.md) (each wallpaper's look, the app's look) first.
 
 ## What this is
-An Android app (`com.thedungeons2077.fluidmotion`) with eight **live wallpapers** ported from cyberdeck_terminal (`~/projects/cyberdeck_terminal`, its `src/wallpaper/`): MATRIX RAIN, NEURAL NET, VELOCITY, DATA FLOW, MEGACITY, HORIZON, SUNSET and PRISM. The app is their preview and settings, in cyberdeck_terminal's design. It's optimized first for the user's Samsung S25 Ultra, and works on any Android 8.1+ phone with OpenGL ES 3.
+An Android app (`com.thedungeons2077.fluidmotion`) with nine **live wallpapers** ported from cyberdeck_terminal (`~/projects/cyberdeck_terminal`, its `src/wallpaper/`): MATRIX RAIN, NEURAL NET, VELOCITY, DATA FLOW, MEGACITY, HORIZON, SUNSET, PRISM and QUANTUM KERNEL. The app is their preview and settings, in cyberdeck_terminal's design. It's optimized first for the user's Samsung S25 Ultra, and works on any Android 8.1+ phone with OpenGL ES 3.
 
 **The key objective (user, 2026-10-23): no hit to battery life or phone performance.** Every change is judged by that first. See ARCHITECTURE.md § Battery.
 
@@ -12,7 +12,7 @@ An Android app (`com.thedungeons2077.fluidmotion`) with eight **live wallpapers*
 - **Layers** (ARCHITECTURE.md):
   - `lib` is pure Kotlin with no Android or GL, and is unit tested.
   - `gl` and `scene` draw. `render` drives the drawing. `wallpaper` and `ui` are the Android entry points.
-  - Per-frame data packing and framing live in `lib` (`RainRecords`, `NeuralFrame`, `VelocityFrame`, `FlowFrame`, `CityFrame`, `HorizonView`, `SunsetView`, `PrismFrame`), so the JVM frame dump and the renderers share them.
+  - Per-frame data packing and framing live in `lib` (`RainRecords`, `NeuralFrame`, `VelocityFrame`, `FlowFrame`, `CityFrame`, `HorizonView`, `SunsetView`, `PrismFrame`, `KernelView`/`KernelMotion`), so the JVM frame dump and the renderers share them.
 - **Nothing allocates per frame** in `render` or `scene`, and nothing runs while a wallpaper is off screen. No loops in the UI either: an idle app screen draws nothing.
   - `FrameAllocationTest` weighs each wallpaper's frame; a new wallpaper gets a case there.
   - Draw random ranges from a `Span`, never a Kotlin float range (`a..b` boxes its ends at every read). In per-frame code, loop over Lists by index (a `for` over a List makes an iterator).
