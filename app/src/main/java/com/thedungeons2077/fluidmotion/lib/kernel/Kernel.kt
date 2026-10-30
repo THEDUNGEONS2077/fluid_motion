@@ -28,6 +28,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 
 /** One depth of code (params.ts DepthSpec). Sizes in dp (the web's CSS px). */
 class DepthSpec(
@@ -87,8 +88,19 @@ object KernelParams {
     const val RUN_SECONDS = 1.6f
     const val RUN_STRENGTH = 0.6f
 
-    /** PHONE: the dashboard's screen width (CSS px) its lanes are counted for. */
+    /** PHONE: the dashboard's screen width (CSS px) its sizes and lanes are made for. */
     const val REFERENCE_WIDTH = 1920f
+
+    /**
+     * PHONE: the text is scaled down on a narrow screen, by (width ÷
+     * REFERENCE_WIDTH)^TEXT_POWER, never below TEXT_MIN (the user, 0.13.1:
+     * "text needs to be way smaller"; at the dashboard's sizes a 384 dp
+     * phone fitted about 27 glyphs across the code in focus, the dashboard
+     * about 134). The S25: 0.40, about 60 across. A screen as wide as the
+     * dashboard keeps its sizes. ZOOM still applies on top.
+     */
+    const val TEXT_POWER = 0.57f
+    const val TEXT_MIN = 0.35f
 
     /** The longest step the motion takes in one frame (s). */
     const val MAX_FRAME_STEP = 0.1f
@@ -128,21 +140,29 @@ object KernelCode {
      * A depth's code: [cols] × [rows] cells (rows loop), [lanes] lanes each
      * running blocks then gaps down the whole loop; a block indented like a
      * function body (deeper after a line ending in `:`, back out now and then).
+     * The lanes repeat across the screen from a random point of the depth's
+     * own, with one more in front, so code runs off both edges alike and no
+     * depth's gaps line up into an empty strip (code.ts 0.27.2).
      */
     fun write(rng: Rng, cols: Int, rows: Int, lanes: Int, spec: DepthSpec, letters: List<Char>): List<CodeLine> {
         val lines = ArrayList<CodeLine>()
         val laneW = cols.toFloat() / lanes
-        for (lane in 0 until lanes) {
+        val phase = rng.next()
+        for (lane in -1 until lanes) {
             // Each lane starts part way into a gap, so the lanes' blocks don't line up.
             var row = floor(rng.next() * (spec.gap[1] + 1)).toInt()
             while (row < rows) {
-                val left = floor(lane * laneW + rng.next() * laneW * 0.25f).toInt()
+                // A quarter of a lane's jitter round its start, so blocks don't line up either.
+                val left = floor((lane + phase) * laneW + (rng.next() - 0.5f) * laneW * 0.25f).toInt()
                 val n = rng.pick(spec.block)
                 var indent = 0
                 var i = 0
                 while (i < n && row < rows) {
                     val text = statement(rng, letters, rng.pick(spec.length))
-                    lines += CodeLine(row, left + indent * 2, text)
+                    // A line starting left of the screen keeps only what's on it (columns stay ≥ 0).
+                    val col = left + indent * 2
+                    val shown = if (col < 0) text.substring(min(text.length, -col)) else text
+                    if (shown.isNotBlank()) lines += CodeLine(row, max(0, col), shown)
                     if (text.endsWith(':')) indent = min(indent + 1, 4) else if (indent > 0 && rng.next() < 0.25f) indent--
                     i++
                     row++
@@ -163,18 +183,31 @@ object KernelCode {
 /**
  * How a screen lays out QUANTUM KERNEL: per depth, a glyph's width and a
  * line's height (px), its lanes (PHONE: as many as fit at the dashboard's
- * lane width), its loop's rows and height (px: at least the screen's, so
- * two copies cover it). [pxPerDp] is zoomed (a zoomed-in screen lays out
- * as if 1/zoom as big).
+ * lane width, at the scaled text), its loop's rows and height (px: at
+ * least the screen's, so two copies cover it). [pxPerDp] is zoomed (a
+ * zoomed-in screen lays out as if 1/zoom as big).
  */
 class KernelView(val width: Float, val height: Float, val pxPerDp: Float) {
     private val depths = KernelParams.DEPTHS
-    val colW = FloatArray(depths.size) { depths[it].font * KernelParams.GLYPH_WIDTH * pxPerDp }
-    val lineH = FloatArray(depths.size) { depths[it].font * depths[it].lineHeight * pxPerDp }
+
+    /** PHONE: how much smaller the text is on this screen (KernelParams.TEXT_POWER). */
+    val textScale = textScaleFor(width / pxPerDp)
+
+    /** px per one of the dashboard's CSS px, for every size of a depth (font, speed, glow, blur, weight): dp × the text scale. */
+    val unit = pxPerDp * textScale
+
+    val colW = FloatArray(depths.size) { depths[it].font * KernelParams.GLYPH_WIDTH * unit }
+    val lineH = FloatArray(depths.size) { depths[it].font * depths[it].lineHeight * unit }
     val cols = IntArray(depths.size) { ceil(width / colW[it]).toInt() }
     val rows = IntArray(depths.size) { max(8, ceil(height / lineH[it]).toInt() + 2) }
     val loopH = FloatArray(depths.size) { rows[it] * lineH[it] }
-    val lanes = IntArray(depths.size) { max(1, ceil(width / pxPerDp * depths[it].lanes / KernelParams.REFERENCE_WIDTH).toInt()) }
+    val lanes = IntArray(depths.size) { max(1, ceil(width / unit * depths[it].lanes / KernelParams.REFERENCE_WIDTH).toInt()) }
+
+    companion object {
+        /** The text scale for a screen [widthDp] wide (zoomed): (width ÷ the dashboard's)^TEXT_POWER, between TEXT_MIN and 1. */
+        fun textScaleFor(widthDp: Float): Float =
+            (widthDp / KernelParams.REFERENCE_WIDTH).coerceAtMost(1f).pow(KernelParams.TEXT_POWER).coerceIn(KernelParams.TEXT_MIN, 1f)
+    }
 }
 
 /** The motion: each depth's scroll (px within its loop) and the line being run. Kept in place, wrapped. */
@@ -193,11 +226,11 @@ class KernelMotion(private val view: KernelView, private val focusLines: List<Co
     val runStrength: Float
         get() = if (runLine < 0) 0f else KernelParams.RUN_STRENGTH * kotlin.math.sin(kotlin.math.PI.toFloat() * runT / KernelParams.RUN_SECONDS)
 
-    /** Moves on by [dt] seconds: the loops scroll (dp a second × px per dp), and a line in focus is run now and then. */
+    /** Moves on by [dt] seconds: the loops scroll (the dashboard's px a second × the view's unit), and a line in focus is run now and then. */
     fun advance(dt: Float) {
         val step = min(dt, KernelParams.MAX_FRAME_STEP)
         val depths = KernelParams.DEPTHS
-        for (i in depths.indices) offset[i] = (offset[i] + depths[i].speed * view.pxPerDp * step) % view.loopH[i]
+        for (i in depths.indices) offset[i] = (offset[i] + depths[i].speed * view.unit * step) % view.loopH[i]
         if (focusLines.isEmpty()) return
         if (runLine >= 0) {
             runT += step

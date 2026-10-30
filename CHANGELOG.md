@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.1 (build 18)
+- **QUANTUM KERNEL's text is much smaller,** as you asked: about 2.5× smaller on your S25, so the code in focus fits about 60 characters across instead of 27, and the layers read as code, not a few giant glyphs. The motion, glow and blur are scaled with it, so it looks the same, only finer. ZOOM (in its settings) still makes it bigger or smaller from there.
+- **Code reaches both edges:** the left side was nearly empty; the code now spreads evenly across the screen, as on the dashboard.
+
 ## 0.13.0 (build 17)
 - **New wallpaper: QUANTUM KERNEL,** from the dashboard: layers of code at five depths on true black, written in MATRIX RAIN's glyphs.
   - **The depths:** small, dim code far back; sharper code nearer; big, bold, glowing code in focus; a few huge lines blurred up front.

@@ -116,7 +116,7 @@ class KernelRenderer(context: Context) : Scene {
         val s = KernelParams.DEPTHS[d]
         val scale = quality.scale(density) * s.resolution
         val g = KernelParams.GLOW.getValue(glow)
-        val reach = s.glowReach * g * v.pxPerDp * scale
+        val reach = s.glowReach * g * v.unit * scale
         val bitmap = Bitmap.createBitmap(max(1, ceil(screenW * scale).toInt()), max(1, ceil(v.loopH[d] * scale).toInt()), Bitmap.Config.ALPHA_8)
         val canvas = Canvas(bitmap)
         canvas.scale(scale, scale)
@@ -127,15 +127,15 @@ class KernelRenderer(context: Context) : Scene {
             passes += reach * 0.5f to minOf(1f, s.glow * g * 0.7f)
             passes += reach * 0.15f to minOf(1f, s.glow * g * 0.8f)
         }
-        passes += s.blur * v.pxPerDp * scale to s.alpha
+        passes += s.blur * v.unit * scale to s.alpha
         for ((sigma, alpha) in passes) {
             val p = Paint(base).apply {
-                textSize = s.font * v.pxPerDp
+                textSize = s.font * v.unit
                 this.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
                 xfermode = add
                 if (s.weight > 0f) {
                     style = Paint.Style.FILL_AND_STROKE
-                    strokeWidth = s.weight * v.pxPerDp
+                    strokeWidth = s.weight * v.unit
                 }
                 // A Gaussian of σ (bitmap px), in the canvas's own units (it's scaled), as a mask filter.
                 blur(sigma / scale)?.let { maskFilter = it }
@@ -222,7 +222,7 @@ class KernelRenderer(context: Context) : Scene {
         val f = KernelParams.FOCUS_DEPTH
         val line = if (m.runLine >= 0) code[f].getOrNull(m.runLine) else null
         if (line != null) {
-            val pad = KernelParams.DEPTHS[f].glowReach * 2f * v.pxPerDp
+            val pad = KernelParams.DEPTHS[f].glowReach * 2f * v.unit
             val top = m.screenY(f, line.row) - pad
             GLES30.glUniform4f(program.u("uRunRect"), line.col * v.colW[f] - pad, top, (line.col + line.text.length) * v.colW[f] + pad, top + v.lineH[f] + 2f * pad)
             GLES30.glUniform1f(program.u("uRun"), m.runStrength)

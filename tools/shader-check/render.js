@@ -921,24 +921,24 @@ window.shaderCheck = async function ({ shaders, dumps, fonts }) {
     const kana = new Set(fonts.kana ? [...d.kana] : []);
     const textures = d.depths.map((s) => {
       const scale = (low ? d.lowScale : 1) * s.resolution;
-      const reach = s.glowReach * d.glowK * d.pxPerDp * scale;
+      const reach = s.glowReach * d.glowK * d.unit * scale;
       const c = new OffscreenCanvas(Math.max(1, Math.ceil(W * scale)), Math.max(1, Math.ceil(s.loopH * scale)));
       const x = c.getContext('2d');
       // The passes, as the renderer's: a wide glow, a tight one, then the glyphs (σ in texture px, opacity), all added.
       const passes = [];
       if (reach > 0 && s.glow > 0) passes.push([reach * 0.5, Math.min(1, s.glow * d.glowK * 0.7)], [reach * 0.15, Math.min(1, s.glow * d.glowK * 0.8)]);
-      passes.push([s.blur * d.pxPerDp * scale, s.alpha]);
+      passes.push([s.blur * d.unit * scale, s.alpha]);
       x.globalCompositeOperation = 'lighter';
       for (const [sigma, alpha] of passes) {
         const layer = new OffscreenCanvas(c.width, c.height);
         const l = layer.getContext('2d');
         l.scale(scale, scale);
-        l.font = `${s.font * d.pxPerDp}px JBMono, Kana`;
+        l.font = `${s.font * d.unit}px JBMono, Kana`;
         l.textAlign = 'center';
         l.textBaseline = 'middle';
         l.fillStyle = '#fff';
         l.strokeStyle = '#fff';
-        l.lineWidth = s.weight * d.pxPerDp;
+        l.lineWidth = s.weight * d.unit;
         for (const line of s.lines) {
           for (const shift of [-s.loopH, 0, s.loopH]) {
             const cy = (line.r + 0.5) * s.lineH + shift;

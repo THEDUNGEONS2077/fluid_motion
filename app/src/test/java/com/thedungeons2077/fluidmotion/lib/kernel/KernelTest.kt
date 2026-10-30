@@ -43,11 +43,47 @@ class KernelTest {
     }
 
     @Test
-    fun `a phone gets as many lanes as fit at the dashboard's lane width, at least one`() {
-        // 384 dp across: the far depth's 6 lanes over 1920 make 1.2 here, so 2; the others 1.
-        assertEquals(listOf(2, 1, 1, 1, 1), view.lanes.toList())
+    fun `a phone's text is much smaller (the user, 0_13_1), a dashboard-wide screen's as the dashboard's`() {
+        // 384 dp across: (384 / 1920)^0.57 ≈ 0.40.
+        assertEquals(0.40f, view.textScale, 0.01f)
+        assertEquals(2.8125f * view.textScale, view.unit, 1e-4f)
+        assertEquals(1f, KernelView.textScaleFor(1920f), 1e-6f)
+        assertEquals(1f, KernelView.textScaleFor(2560f), 1e-6f)
+        assertEquals(KernelParams.TEXT_MIN, KernelView.textScaleFor(100f), 1e-6f)
+        // About 60 glyphs across the code in focus (it was 27 at the dashboard's sizes).
+        val f = KernelParams.FOCUS_DEPTH
+        assertTrue("${view.cols[f]} across", view.cols[f] in 55..70)
+    }
+
+    @Test
+    fun `a phone gets as many lanes as fit at the dashboard's lane width at its text size, at least one`() {
+        // 384 dp at a text scale of 0.40 lays out as if 961 wide: about half the dashboard's lanes, rounded up.
+        for (d in KernelParams.DEPTHS.indices) {
+            val want = maxOf(1, kotlin.math.ceil(1080f / view.unit * KernelParams.DEPTHS[d].lanes / 1920f).toInt())
+            assertEquals(want, view.lanes[d])
+            assertTrue(view.lanes[d] >= (KernelParams.DEPTHS[d].lanes + 1) / 2)
+        }
         // Each loop at least the screen's height.
         for (d in KernelParams.DEPTHS.indices) assertTrue(view.loopH[d] >= 2340f)
+    }
+
+    @Test
+    fun `code spreads evenly across the width, no empty strip down either side (code ts 0_27_2)`() {
+        for (d in KernelParams.DEPTHS.indices) {
+            val cols = view.cols[d]
+            var left = 0
+            var right = 0
+            for (k in 1..40) {
+                for (l in KernelCode.write(Rng(k * 7919), cols, 200, view.lanes[d], KernelParams.DEPTHS[d], letters)) {
+                    for (i in l.text.indices) {
+                        val c = l.col + i
+                        if (l.text[i] == ' ' || c >= cols) continue
+                        if (c < cols / 3f) left++ else if (c >= 2f * cols / 3f) right++
+                    }
+                }
+            }
+            assertTrue("depth $d: left $left, right $right", minOf(left, right).toFloat() / maxOf(left, right) > 0.75f)
+        }
     }
 
     @Test
@@ -62,7 +98,7 @@ class KernelTest {
             if (m.runLine >= 0 && m.runT == 1f / 30f) {
                 ran++
                 val y = m.screenY(f, focus[m.runLine].row)
-                // Picked on screen a frame ago (it has scrolled up one frame's step since: about 2.4 px).
+                // Picked on screen a frame ago (it has scrolled up one frame's step since: about 1 px at the phone's text scale).
                 assertTrue("run at $y", y > 2340f * 0.05f - 5f && y < 2340f * 0.9f)
             }
         }

@@ -414,7 +414,7 @@ class FrameDumpTest {
         val tones = KernelTones(Palettes.AZURE.colors)
         val f = KernelParams.FOCUS_DEPTH
         val run = code[f][motion.runLine]
-        val pad = KernelParams.DEPTHS[f].glowReach * 2f * view.pxPerDp
+        val pad = KernelParams.DEPTHS[f].glowReach * 2f * view.unit
         val top = motion.screenY(f, run.row) - pad
         val depths = KernelParams.DEPTHS.indices.joinToString(",", "[", "]") { d ->
             val s = KernelParams.DEPTHS[d]
@@ -424,7 +424,7 @@ class FrameDumpTest {
                 .num("loopH", view.loopH[d]).num("offset", motion.offset[d]).floats("colour", tones.tones[s.tone]).raw("lines", lines).done()
         }
         val json = Json()
-            .ints("screen", intArrayOf(w, h)).num("pxPerDp", view.pxPerDp).num("lowScale", Quality.LOW.scale(density)).num("glowK", KernelParams.GLOW.getValue(GlowLevel.HIGH))
+            .ints("screen", intArrayOf(w, h)).num("unit", view.unit).num("lowScale", Quality.LOW.scale(density)).num("glowK", KernelParams.GLOW.getValue(GlowLevel.HIGH))
             .floats("back", tones.back).str("kana", KATAKANA)
             .floats("runRect", floatArrayOf(run.col * view.colW[f] - pad, top, (run.col + run.text.length) * view.colW[f] + pad, top + view.lineH[f] + 2f * pad)).num("run", motion.runStrength)
             .raw("depths", depths)
